@@ -83,7 +83,7 @@ export async function verify<
     chainId = getNetworkId(payload.network);
     name = paymentRequirements.extra?.name ?? config[chainId.toString()].usdcName;
     erc20Address = paymentRequirements.asset as Address;
-    version = paymentRequirements.extra?.version ?? (await getVersion(client));
+    version = paymentRequirements.extra?.version ?? (await getVersion(client, erc20Address));
   } catch {
     return {
       isValid: false,

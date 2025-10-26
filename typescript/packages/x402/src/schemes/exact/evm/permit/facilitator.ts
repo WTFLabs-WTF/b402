@@ -65,7 +65,7 @@ export async function verify<
         abi: erc20PermitABI,
         functionName: "name",
       })) as string);
-    version = paymentRequirements.extra?.version ?? (await getVersion(client));
+    version = paymentRequirements.extra?.version ?? (await getVersion(client, erc20Address));
   } catch {
     return {
       isValid: false,

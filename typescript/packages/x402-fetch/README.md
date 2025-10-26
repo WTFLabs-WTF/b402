@@ -2,6 +2,16 @@
 
 A utility package that extends the native `fetch` API to automatically handle 402 Payment Required responses using the x402 payment protocol. This package enables seamless integration of payment functionality into your applications when making HTTP requests.
 
+## Supported Authorization Types
+
+This package supports multiple EVM authorization standards:
+
+- **EIP-3009** (default): `transferWithAuthorization` - gasless token transfers
+- **EIP-2612 Permit**: Standard permit functionality for ERC-20 tokens
+- **Permit2**: Uniswap's universal token approval system
+
+The authorization type is automatically selected based on the server's payment requirements (`extra.authorizationType`).
+
 ## Installation
 
 ```bash
@@ -57,7 +67,9 @@ A wrapped fetch function that automatically handles 402 responses by:
 4. Creating a payment header using the provided wallet client
 5. Retrying the request with the payment header
 
-## Example
+## Examples
+
+### Basic Usage
 
 ```typescript
 import { config } from "dotenv";
@@ -91,4 +103,84 @@ fetchWithPay(API_URL, {
     console.error(error);
   });
 ```
+
+### Server-Side: Specifying Authorization Type
+
+The server specifies which authorization type the client should use in the 402 response:
+
+```typescript
+// EIP-2612 Permit example
+app.post("/api/protected", async (c) => {
+  const paymentHeader = c.req.header("X-PAYMENT");
+  
+  if (!paymentHeader) {
+    return c.json({
+      x402Version: 1,
+      accepts: [{
+        scheme: "exact",
+        network: "base-sepolia",
+        maxAmountRequired: "100000",
+        resource: "http://localhost:3000/api/protected",
+        description: "Access to protected resource",
+        mimeType: "application/json",
+        payTo: "0x...",
+        maxTimeoutSeconds: 3600,
+        asset: "0x...", // Token address
+        extra: {
+          authorizationType: "permit", // Specify permit
+        }
+      }]
+    }, 402);
+  }
+  
+  // Verify and settle payment...
+});
+```
+
+```typescript
+// Permit2 example
+app.post("/api/protected", async (c) => {
+  const paymentHeader = c.req.header("X-PAYMENT");
+  
+  if (!paymentHeader) {
+    return c.json({
+      x402Version: 1,
+      accepts: [{
+        scheme: "exact",
+        network: "base-sepolia",
+        maxAmountRequired: "100000",
+        resource: "http://localhost:3000/api/protected",
+        description: "Access to protected resource",
+        mimeType: "application/json",
+        payTo: "0x...",
+        maxTimeoutSeconds: 3600,
+        asset: "0x...", // Token address
+        extra: {
+          authorizationType: "permit2", // Specify permit2
+        }
+      }]
+    }, 402);
+  }
+  
+  // Verify and settle payment...
+});
+```
+
+### Authorization Type Selection
+
+The client automatically detects and uses the appropriate authorization type:
+
+1. **Server specifies `authorizationType: "permit"`** → Client uses EIP-2612 Permit
+2. **Server specifies `authorizationType: "permit2"`** → Client uses Permit2
+3. **Server specifies `authorizationType: "eip3009"` or omits it** → Client uses EIP-3009 (default)
+
+### Authorization Type Comparison
+
+| Feature | EIP-3009 | EIP-2612 Permit | Permit2 |
+|---------|----------|-----------------|---------|
+| Gas efficiency | High | High | High |
+| Token support | Limited (tokens with EIP-3009) | Wide (most ERC-20) | Universal |
+| Approval management | Per-transaction | Per-spender | Universal router |
+| Nonce management | Custom | On-chain | Advanced |
+| Best for | Specialized tokens | Standard ERC-20 | DeFi integrations |
 

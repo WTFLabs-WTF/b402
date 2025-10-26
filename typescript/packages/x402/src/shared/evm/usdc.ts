@@ -38,33 +38,81 @@ export function getUsdcChainConfigForChain(chainId: number): ChainConfig | undef
   return config[chainId.toString()];
 }
 
-// Cache for storing the version value
-let versionCache: string | null = null;
+// Cache for storing the version value per token address
+const versionCache: Map<string, string> = new Map();
 
 /**
- * Gets the version of the USDC contract, using a cache to avoid repeated calls
+ * Gets the version of an ERC20 Permit contract, using a cache to avoid repeated calls
+ *
+ * Priority order:
+ * 1. Try eip712Domain() (EIP-5267, OpenZeppelin v5+)
+ * 2. Fallback to version() function (OpenZeppelin v4)
+ * 3. Default to "1" if neither is available
  *
  * @param client - The Viem client instance connected to the blockchain
- * @returns A promise that resolves to the USDC contract version string
+ * @param tokenAddress - Optional token address. If not provided, uses USDC address
+ * @returns A promise that resolves to the ERC20 contract version string
  */
 export async function getVersion<
   transport extends Transport,
   chain extends Chain,
   account extends Account | undefined = undefined,
->(client: ConnectedClient<transport, chain, account>): Promise<string> {
+>(client: ConnectedClient<transport, chain, account>, tokenAddress?: Address): Promise<string> {
+  const address = tokenAddress ?? getUsdcAddress(client);
+  const cacheKey = `${client.chain!.id}-${address.toLowerCase()}`;
+
   // Return cached version if available
-  if (versionCache !== null) {
-    return versionCache;
+  if (versionCache.has(cacheKey)) {
+    return versionCache.get(cacheKey)!;
   }
 
-  // Fetch and cache version if not available
-  const version = await client.readContract({
-    address: getUsdcAddress(client),
-    abi,
-    functionName: "version",
-  });
-  versionCache = version as string;
-  return versionCache;
+  // Try to get version from EIP-5267 eip712Domain() first (OpenZeppelin v5+)
+  let version = "1";
+  try {
+    const eip712DomainABI = [
+      {
+        inputs: [],
+        name: "eip712Domain",
+        outputs: [
+          { name: "fields", type: "bytes1" },
+          { name: "name", type: "string" },
+          { name: "version", type: "string" },
+          { name: "chainId", type: "uint256" },
+          { name: "verifyingContract", type: "address" },
+          { name: "salt", type: "bytes32" },
+          { name: "extensions", type: "uint256[]" },
+        ],
+        stateMutability: "view",
+        type: "function",
+      },
+    ] as const;
+
+    const result = await client.readContract({
+      address,
+      abi: eip712DomainABI,
+      functionName: "eip712Domain",
+    });
+    // eip712Domain returns [fields, name, version, chainId, verifyingContract, salt, extensions]
+    version = result[2] as string; // version is the 3rd element (index 2)
+  } catch {
+    // Fallback to version() function (OpenZeppelin v4)
+    try {
+      const result = await client.readContract({
+        address,
+        abi,
+        functionName: "version",
+      });
+      version = result as string;
+    } catch {
+      // If neither method is available, use default "1" (standard for OpenZeppelin ERC20Permit)
+      console.warn(
+        `Neither eip712Domain() nor version() available for token ${address}, using default: ${version}`,
+      );
+    }
+  }
+
+  versionCache.set(cacheKey, version);
+  return version;
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   PaymentRequirementsSelector,
   selectPaymentRequirements,
 } from "x402/client";
+import { exact } from "x402/schemes";
 
 /**
  * Enables the payment of APIs using the x402 payment protocol.
@@ -90,12 +91,46 @@ export function wrapFetchWithPayment(
       throw new Error("Payment amount exceeds maximum allowed");
     }
 
-    const paymentHeader = await createPaymentHeader(
-      walletClient,
-      x402Version,
-      selectedPaymentRequirements,
-      config,
-    );
+    // 获取授权类型，默认为 eip3009（向后兼容）
+    const authorizationType = selectedPaymentRequirements.extra?.authorizationType || "eip3009";
+
+    // 根据授权类型创建支付头
+    let paymentHeader: string;
+
+    // 仅对 EVM 网络支持 permit 和 permit2
+    const isEvmNetwork = network && !["solana", "solana-devnet"].includes(network[0]);
+
+    if (authorizationType === "permit" && isEvmNetwork) {
+      // 使用 EIP-2612 Permit
+      if (!evm.isSignerWallet(walletClient as typeof evm.EvmSigner)) {
+        throw new Error("Permit authorization requires an EVM signer wallet");
+      }
+      paymentHeader = await exact.evm.permit.createPaymentHeader(
+        walletClient as typeof evm.EvmSigner,
+        x402Version,
+        selectedPaymentRequirements,
+      );
+    } else if (authorizationType === "permit2" && isEvmNetwork) {
+      // 使用 Permit2
+      if (!evm.isSignerWallet(walletClient as typeof evm.EvmSigner)) {
+        throw new Error("Permit2 authorization requires an EVM signer wallet");
+      }
+      paymentHeader = await exact.evm.permit2.createPaymentHeader(
+        walletClient as typeof evm.EvmSigner,
+        x402Version,
+        selectedPaymentRequirements,
+      );
+    } else if (authorizationType === "eip3009" || !authorizationType) {
+      // 默认使用 EIP-3009（统一的 createPaymentHeader）
+      paymentHeader = await createPaymentHeader(
+        walletClient,
+        x402Version,
+        selectedPaymentRequirements,
+        config,
+      );
+    } else {
+      throw new Error(`Unsupported authorization type: ${authorizationType}`);
+    }
 
     if (!init) {
       throw new Error("Missing fetch request configuration");
