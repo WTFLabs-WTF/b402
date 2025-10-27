@@ -10,7 +10,7 @@ This package supports multiple EVM authorization standards:
 - **EIP-2612 Permit**: Standard permit functionality for ERC-20 tokens
 - **Permit2**: Uniswap's universal token approval system
 
-The authorization type is automatically selected based on the server's payment requirements (`extra.authorizationType`).
+The authorization type is automatically selected based on the server's payment requirements (`paymentType` field).
 
 ## Installation
 
@@ -44,6 +44,34 @@ const response = await fetchWithPay("https://api.example.com/paid-endpoint", {
 
 const data = await response.json();
 ```
+
+## 多链支持
+
+x402-fetch 现在支持灵活的多 EVM 链配置！使用新的 `createEvmSigner` API：
+
+```typescript
+import { createEvmSigner, wrapFetchWithPayment } from 'x402-fetch';
+
+// 方式 1：使用链名称
+const bscSigner = createEvmSigner('bsc', '0xYourPrivateKey');
+
+// 方式 2：使用 viem chain 对象
+import { polygon } from 'viem/chains';
+const polygonSigner = createEvmSigner(polygon, '0xYourPrivateKey');
+
+// 方式 3：自定义配置（包括自定义 RPC）
+const customSigner = createEvmSigner({
+  chainId: 56,
+  name: 'BSC',
+  rpcUrl: 'https://my-custom-rpc.com',
+}, '0xYourPrivateKey');
+
+// 为每条链创建独立的 fetch wrapper
+const fetchBsc = wrapFetchWithPayment(fetch, bscSigner);
+const fetchPolygon = wrapFetchWithPayment(fetch, polygonSigner);
+```
+
+**[📖 查看完整的多链使用指南](./MULTI_CHAIN_USAGE.md)**
 
 ## API
 
@@ -104,9 +132,9 @@ fetchWithPay(API_URL, {
   });
 ```
 
-### Server-Side: Specifying Authorization Type
+### Server-Side: Specifying Payment Type
 
-The server specifies which authorization type the client should use in the 402 response:
+The server specifies which payment type the client should use in the 402 response:
 
 ```typescript
 // EIP-2612 Permit example
@@ -126,9 +154,7 @@ app.post("/api/protected", async (c) => {
         payTo: "0x...",
         maxTimeoutSeconds: 3600,
         asset: "0x...", // Token address
-        extra: {
-          authorizationType: "permit", // Specify permit
-        }
+        paymentType: "permit", // Specify permit
       }]
     }, 402);
   }
@@ -155,9 +181,7 @@ app.post("/api/protected", async (c) => {
         payTo: "0x...",
         maxTimeoutSeconds: 3600,
         asset: "0x...", // Token address
-        extra: {
-          authorizationType: "permit2", // Specify permit2
-        }
+        paymentType: "permit2", // Specify permit2
       }]
     }, 402);
   }
@@ -166,13 +190,13 @@ app.post("/api/protected", async (c) => {
 });
 ```
 
-### Authorization Type Selection
+### Payment Type Selection
 
-The client automatically detects and uses the appropriate authorization type:
+The client automatically detects and uses the appropriate payment type:
 
-1. **Server specifies `authorizationType: "permit"`** → Client uses EIP-2612 Permit
-2. **Server specifies `authorizationType: "permit2"`** → Client uses Permit2
-3. **Server specifies `authorizationType: "eip3009"` or omits it** → Client uses EIP-3009 (default)
+1. **Server specifies `paymentType: "permit"`** → Client uses EIP-2612 Permit
+2. **Server specifies `paymentType: "permit2"`** → Client uses Permit2
+3. **Server specifies `paymentType: "eip3009"` or omits it** → Client uses EIP-3009 (default)
 
 ### Authorization Type Comparison
 

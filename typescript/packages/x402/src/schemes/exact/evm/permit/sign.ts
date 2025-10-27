@@ -7,6 +7,7 @@ import {
   SignerWallet,
 } from "../../../../types/shared/evm";
 import { PermitEvmPayloadAuthorization, PaymentRequirements } from "../../../../types/verify";
+import { getVersion } from "../../../../shared/evm/usdc";
 
 /**
  * Signs an EIP-2612 Permit authorization for ERC20 approval
@@ -36,6 +37,7 @@ export async function signPermit<transport extends Transport, chain extends Chai
   let version: string;
 
   if (isSignerWallet(walletClient)) {
+    // Get nonce, name, and version in parallel
     [nonce, name, version] = await Promise.all([
       walletClient.readContract({
         address: tokenAddress,
@@ -48,11 +50,7 @@ export async function signPermit<transport extends Transport, chain extends Chai
         abi: erc20PermitABI,
         functionName: "name",
       }) as Promise<string>,
-      walletClient.readContract({
-        address: tokenAddress,
-        abi: erc20PermitABI,
-        functionName: "version",
-      }) as Promise<string>,
+      getVersion(walletClient, tokenAddress),
     ]);
   } else {
     throw new Error("Local account signing for permit requires a connected client");

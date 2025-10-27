@@ -1,5 +1,5 @@
 {
-  "name": "x402-next",
+  "name": "@wtflabs/x402-next",
   "version": "0.6.5",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -41,7 +41,7 @@
     "@coinbase/cdp-sdk": "^1.22.0",
     "@solana/kit": "^2.1.1",
     "viem": "^2.21.26",
-    "x402": "workspace:^",
+    "@wtflabs/x402": "workspace:^",
     "zod": "^3.24.2"
   },
   "peerDependencies": {

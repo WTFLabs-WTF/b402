@@ -7,8 +7,8 @@ import {
   SupportedSVMNetworks,
   VerifyResponse,
   createSigner,
-} from "x402/types";
-import { verify } from "x402/facilitator";
+} from "@wtflabs/x402/types";
+import { verify } from "@wtflabs/x402/facilitator";
 
 type VerifyRequest = {
   paymentPayload: PaymentPayload;

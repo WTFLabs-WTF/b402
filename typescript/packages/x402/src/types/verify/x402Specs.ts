@@ -90,6 +90,7 @@ export const PaymentRequirementsSchema = z.object({
   payTo: EvmOrSvmAddress,
   maxTimeoutSeconds: z.number().int(),
   asset: mixedAddressOrSvmAddress,
+  paymentType: z.enum(["eip3009", "permit", "permit2"]).optional(),
   extra: z.record(z.any()).optional(),
 });
 export type PaymentRequirements = z.infer<typeof PaymentRequirementsSchema>;
@@ -170,10 +171,10 @@ export type EvmPaymentPayload<T extends "eip3009" | "permit" | "permit2"> = Omit
     authorizationType: T;
     signature: `0x${string}`;
     authorization: T extends "eip3009"
-      ? z.infer<typeof ExactEvmPayloadAuthorizationSchema>
-      : T extends "permit"
-        ? z.infer<typeof PermitEvmPayloadAuthorizationSchema>
-        : z.infer<typeof Permit2EvmPayloadAuthorizationSchema>;
+    ? z.infer<typeof ExactEvmPayloadAuthorizationSchema>
+    : T extends "permit"
+    ? z.infer<typeof PermitEvmPayloadAuthorizationSchema>
+    : z.infer<typeof Permit2EvmPayloadAuthorizationSchema>;
   };
 };
 
@@ -186,10 +187,10 @@ export type UnsignedEvmPaymentPayload<T extends "eip3009" | "permit" | "permit2"
     authorizationType: T;
     signature: undefined;
     authorization: T extends "eip3009"
-      ? z.infer<typeof ExactEvmPayloadAuthorizationSchema>
-      : T extends "permit"
-        ? Omit<z.infer<typeof PermitEvmPayloadAuthorizationSchema>, "nonce"> & { nonce?: string }
-        : Omit<z.infer<typeof Permit2EvmPayloadAuthorizationSchema>, "nonce"> & { nonce?: string };
+    ? z.infer<typeof ExactEvmPayloadAuthorizationSchema>
+    : T extends "permit"
+    ? Omit<z.infer<typeof PermitEvmPayloadAuthorizationSchema>, "nonce"> & { nonce?: string }
+    : Omit<z.infer<typeof Permit2EvmPayloadAuthorizationSchema>, "nonce"> & { nonce?: string };
   };
 };
 

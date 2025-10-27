@@ -8,13 +8,13 @@ import {
   isSvmSignerWallet,
   Network,
   X402Config,
-} from "x402/types";
+} from "@wtflabs/x402/types";
 import {
   createPaymentHeader,
   PaymentRequirementsSelector,
   selectPaymentRequirements,
-} from "x402/client";
-import { exact } from "x402/schemes";
+} from "@wtflabs/x402/client";
+import { exact } from "@wtflabs/x402/schemes";
 
 /**
  * Enables the payment of APIs using the x402 payment protocol.
@@ -91,16 +91,16 @@ export function wrapFetchWithPayment(
       throw new Error("Payment amount exceeds maximum allowed");
     }
 
-    // 获取授权类型，默认为 eip3009（向后兼容）
-    const authorizationType = selectedPaymentRequirements.extra?.authorizationType || "eip3009";
+    // 获取支付类型，默认为 eip3009
+    const paymentType = selectedPaymentRequirements.paymentType || "eip3009";
 
-    // 根据授权类型创建支付头
+    // 根据支付类型创建支付头
     let paymentHeader: string;
 
     // 仅对 EVM 网络支持 permit 和 permit2
     const isEvmNetwork = network && !["solana", "solana-devnet"].includes(network[0]);
 
-    if (authorizationType === "permit" && isEvmNetwork) {
+    if (paymentType === "permit" && isEvmNetwork) {
       // 使用 EIP-2612 Permit
       if (!evm.isSignerWallet(walletClient as typeof evm.EvmSigner)) {
         throw new Error("Permit authorization requires an EVM signer wallet");
@@ -110,7 +110,7 @@ export function wrapFetchWithPayment(
         x402Version,
         selectedPaymentRequirements,
       );
-    } else if (authorizationType === "permit2" && isEvmNetwork) {
+    } else if (paymentType === "permit2" && isEvmNetwork) {
       // 使用 Permit2
       if (!evm.isSignerWallet(walletClient as typeof evm.EvmSigner)) {
         throw new Error("Permit2 authorization requires an EVM signer wallet");
@@ -120,7 +120,7 @@ export function wrapFetchWithPayment(
         x402Version,
         selectedPaymentRequirements,
       );
-    } else if (authorizationType === "eip3009" || !authorizationType) {
+    } else if (paymentType === "eip3009" || !paymentType) {
       // 默认使用 EIP-3009（统一的 createPaymentHeader）
       paymentHeader = await createPaymentHeader(
         walletClient,
@@ -129,7 +129,7 @@ export function wrapFetchWithPayment(
         config,
       );
     } else {
-      throw new Error(`Unsupported authorization type: ${authorizationType}`);
+      throw new Error(`Unsupported payment type: ${paymentType}`);
     }
 
     if (!init) {
@@ -155,7 +155,16 @@ export function wrapFetchWithPayment(
   };
 }
 
-export { decodeXPaymentResponse } from "x402/shared";
-export { createSigner, type Signer, type MultiNetworkSigner, type X402Config } from "x402/types";
-export { type PaymentRequirementsSelector } from "x402/client";
-export type { Hex } from "viem";
+export { decodeXPaymentResponse } from "@wtflabs/x402/shared";
+export {
+  createSigner,
+  createConnectedClient,
+  withChain,
+  type Signer,
+  type ConnectedClient,
+  type MultiNetworkSigner,
+  type X402Config,
+  type EvmChainConfig
+} from "@wtflabs/x402/types";
+export { type PaymentRequirementsSelector } from "@wtflabs/x402/client";
+export type { Hex, Chain } from "viem";

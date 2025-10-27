@@ -40,14 +40,13 @@ export function computeRoutePatterns(routes: RoutesConfig): RoutePattern[] {
     return {
       verb: verb.toUpperCase(),
       pattern: new RegExp(
-        `^${
-          path
-            // First escape all special regex characters except * and []
-            .replace(/[$()+.?^{|}]/g, "\\$&")
-            // Then handle our special pattern characters
-            .replace(/\*/g, ".*?") // Make wildcard non-greedy and optional
-            .replace(/\[([^\]]+)\]/g, "[^/]+") // Convert [param] to regex capture
-            .replace(/\//g, "\\/") // Escape slashes
+        `^${path
+          // First escape all special regex characters except * and []
+          .replace(/[$()+.?^{|}]/g, "\\$&")
+          // Then handle our special pattern characters
+          .replace(/\*/g, ".*?") // Make wildcard non-greedy and optional
+          .replace(/\[([^\]]+)\]/g, "[^/]+") // Convert [param] to regex capture
+          .replace(/\//g, "\\/") // Escape slashes
         }$`,
         "i",
       ),
@@ -188,9 +187,20 @@ export function findMatchingPaymentRequirements(
   paymentRequirements: PaymentRequirements[],
   payment: PaymentPayload,
 ) {
-  return paymentRequirements.find(
-    value => value.scheme === payment.scheme && value.network === payment.network,
-  );
+  return paymentRequirements.find(value => {
+    // 基础匹配：scheme 和 network 必须一致
+    if (value.scheme !== payment.scheme || value.network !== payment.network) {
+      return false;
+    }
+
+    // 如果 PaymentRequirements 指定了 paymentType，需要匹配
+    // 这主要用于 EVM 的不同支付协议（eip3009、permit、permit2）
+    if (value.paymentType && "authorizationType" in payment.payload) {
+      return value.paymentType === payment.payload.authorizationType;
+    }
+
+    return true;
+  });
 }
 
 /**

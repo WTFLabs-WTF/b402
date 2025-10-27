@@ -21,8 +21,8 @@ app.use(
         // USDC amount in dollars
         price: "$0.001",
         // network: "base" // uncomment for Base mainnet
-        // network: "solana" // uncomment for Solana mainnet
-        network: "base-sepolia",
+        network: "solana-devnet", // uncomment for Solana mainnet
+        // network: "base-sepolia",
       },
       "/premium/*": {
         // Define atomic amounts in any EIP-3009 token
@@ -40,7 +40,7 @@ app.use(
         },
         // network: "base" // uncomment for Base mainnet
         // network: "solana" // uncomment for Solana mainnet
-        network: "base-sepolia",
+        network: "solana-devnet",
       },
     },
     {

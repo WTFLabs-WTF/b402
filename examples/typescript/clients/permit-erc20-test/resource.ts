@@ -6,7 +6,7 @@ import axios from "axios";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
-import { Hex } from "viem";
+import { Hex, parseEther } from "viem";
 
 // Load .env
 const __filename = fileURLToPath(import.meta.url);
@@ -15,25 +15,40 @@ const envPath = path.resolve(__dirname, "./.env");
 dotenv.config({ path: envPath });
 
 // Constants
-const PORT = 4025;
-const FACILITATOR_URL = "http://localhost:3002";
-const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Hex; // Base Sepolia USDC
-const PAYMENT_AMOUNT = "50000"; // 0.05 USDC (50000 wei, assuming 6 decimals)
-const PAYMENT_RECIPIENT = "0xaec0188efb73769aedd1ffcbb7c5e1fe468e64e3" as Hex;
+const PORT = 4024;
+const FACILITATOR_URL = "http://localhost:3000";
+const USDC_ADDRESS = "0x03dB069489e2cAA4e51ED149E83D732EF3931670" as Hex; // USDC
+const PAYMENT_AMOUNT = parseEther("0.05").toString(); // 0.05 USDC (50000 wei, assuming 6 decimals)
+const PAYMENT_RECIPIENT = "0x11346aa19b6553dc3508f04015b4c2c749380d50" as Hex;
 
 // Payment details
 const paymentDetails = {
   scheme: "exact",
-  network: "base-sepolia",
+  network: "bsc-testnet",
   maxAmountRequired: PAYMENT_AMOUNT,
   resource: `http://localhost:${PORT}/protected-resource`,
-  description: "Access to protected resource with Permit2",
+  description: "Access to protected resource with EIP-2612 Permit",
   mimeType: "application/json",
   payTo: PAYMENT_RECIPIENT,
   maxTimeoutSeconds: 3600,
   asset: USDC_ADDRESS,
-  paymentType: "permit2",
-  outputSchema: {},
+  paymentType: "permit",
+  outputSchema: {
+    "input": {
+      "type": "http",
+      "method": "POST",
+      "discoverable": true,
+      "bodyFields": {}
+    },
+    "output": {
+      "message": "string",
+      "authorizationType": "string",
+      "payer": "string"
+    }
+  },
+  extra: {
+    feePayer: '0xe4bb3CB99F7C9c876544d7b0DB481036Baf4aBcD',
+  },
 };
 
 // Hono App
@@ -51,8 +66,10 @@ app.post("/protected-resource", async (c) => {
     return c.json(
       {
         x402Version: 1,
-        accepts: [paymentDetails],
-        error: "Payment required",
+        error: "X-PAYMENT header is required",
+        accepts: [
+          paymentDetails
+        ],
       },
       402
     );
@@ -68,6 +85,9 @@ app.post("/protected-resource", async (c) => {
     console.error("❌ Error decoding X-PAYMENT header:", err);
     return c.json({ error: "Invalid payment header format" }, 400);
   }
+
+  console.log('paymentDetails: ', paymentDetails)
+  console.log('paymentHeader: ', paymentHeader)
 
   // Verify payment with Facilitator
   try {
@@ -113,26 +133,26 @@ app.post("/protected-resource", async (c) => {
     }
   } catch (err) {
     console.error("❌ Error calling facilitator /settle:", err.response?.data || err.message);
+    return c.json({ error: "Facilitator settlement failed" }, 500);
   }
 
   // Return success response
   console.log("✅ Responding 200 OK to client");
   return c.json({
-    message: "Payment verified and settled successfully with Permit2!",
-    authorizationType: "permit2",
+    message: "Payment verified and settled successfully with EIP-2612 Permit!",
+    authorizationType: "permit",
     payer: paymentHeader.payload?.authorization?.owner,
   });
 });
 
 // Start server
 console.log(`\n═══════════════════════════════════════════`);
-console.log(`  Permit2 Universal Resource Server`);
+console.log(`  EIP-2612 Permit Resource Server`);
 console.log(`═══════════════════════════════════════════`);
 console.log(`  Port: ${PORT}`);
 console.log(`  Token: ${USDC_ADDRESS} (USDC)`);
-console.log(`  Payment: ${PAYMENT_AMOUNT} wei (0.05 USDC)`);
+console.log(`  Payment: ${PAYMENT_AMOUNT} wei (1 DAI)`);
 console.log(`  Facilitator: ${FACILITATOR_URL}`);
-console.log(`  Permit2: 0x000000000022D473030F116dDEE9F6B43aC78BA3`);
 console.log(`═══════════════════════════════════════════\n`);
 
 serve({

@@ -28,6 +28,9 @@ describe("Permit preparePaymentHeader", () => {
     payTo: "0x1234567890123456789012345678901234567890",
     maxTimeoutSeconds: 300,
     asset: "0x1234567890123456789012345678901234567890",
+    extra: {
+      feePayer: "0x1234567890123456789012345678901234567890",
+    },
   };
 
   const mockFromAddress = "0xabcdef1234567890123456789012345678901234";
@@ -56,7 +59,7 @@ describe("Permit preparePaymentHeader", () => {
         signature: undefined,
         authorization: {
           owner: mockFromAddress,
-          spender: mockPaymentRequirements.payTo,
+          spender: mockPaymentRequirements.extra?.feePayer,
           value: mockPaymentRequirements.maxAmountRequired,
           deadline: (currentTime + mockPaymentRequirements.maxTimeoutSeconds).toString(),
         },

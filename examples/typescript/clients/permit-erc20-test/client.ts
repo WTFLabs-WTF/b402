@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { baseSepolia } from "viem/chains";
+import { baseSepolia, bscTestnet } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { http, publicActions, createWalletClient, Hex, Address, parseEther } from "viem";
 import axios from "axios";
@@ -26,18 +26,18 @@ if (!clientPrivateKey || !providerUrl) {
 
 // Constants
 const RESOURCE_SERVER_URL = "http://localhost:4024"; // Different port for Permit example
-const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Address; // USDC
-const PAYMENT_AMOUNT = parseEther("0.05"); // 0.05 USDC (50000 wei, assuming 6 decimals)
+const USDC_ADDRESS = "0x03dB069489e2cAA4e51ED149E83D732EF3931670" as Address; // USDC
+const PAYMENT_AMOUNT = parseEther("0.05").toString(); // 0.05 USDC (50000 wei, assuming 6 decimals
 const FACILITATOR_WALLET_ADDRESS = "0xe4bb3CB99F7C9c876544d7b0DB481036Baf4aBcD" as Address;
 
 // Setup client wallet
 const clientAccount = privateKeyToAccount(clientPrivateKey as Hex);
 const clientWallet = createWalletClient({
   account: clientAccount,
-  chain: baseSepolia,
+  chain: bscTestnet,
   transport: http(providerUrl),
 }).extend(publicActions);
-
+console.log('address: ', clientAccount.address);
 /**
  * Create an x402 payment header using EIP-2612 Permit
  */
@@ -139,7 +139,7 @@ async function createPermitPaymentHeader() {
   const domain = {
     name: tokenName,
     version: tokenVersion,
-    chainId: baseSepolia.id,
+    chainId: bscTestnet.id,
     verifyingContract: USDC_ADDRESS,
   };
 
@@ -174,7 +174,7 @@ async function createPermitPaymentHeader() {
   const paymentPayload = {
     x402Version: 1,
     scheme: "exact",
-    network: "base-sepolia",
+    network: "bsc-testnet",
     payload: {
       authorizationType: "permit",
       signature,

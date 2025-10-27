@@ -9,6 +9,7 @@ const baseConfig = {
   },
   sourcemap: true,
   target: "node16",
+  external: ["@wtflabs/x402", "viem"],
 };
 
 export default defineConfig([
