@@ -15,7 +15,7 @@ The authorization type is automatically selected based on the server's payment r
 ## Installation
 
 ```bash
-npm install x402-fetch
+npm install @wtflabs/x402-fetch
 ```
 
 ## Quick Start
@@ -23,7 +23,7 @@ npm install x402-fetch
 ```typescript
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { wrapFetchWithPayment } from "x402-fetch";
+import { wrapFetchWithPayment } from "@wtflabs/x402-fetch";
 import { baseSepolia } from "viem/chains";
 
 // Create a wallet client
@@ -50,7 +50,7 @@ const data = await response.json();
 x402-fetch 现在支持灵活的多 EVM 链配置！使用新的 `createEvmSigner` API：
 
 ```typescript
-import { createEvmSigner, wrapFetchWithPayment } from 'x402-fetch';
+import { createEvmSigner, wrapFetchWithPayment } from '@wtflabs/x402-fetch';
 
 // 方式 1：使用链名称
 const bscSigner = createEvmSigner('bsc', '0xYourPrivateKey');
@@ -103,7 +103,7 @@ A wrapped fetch function that automatically handles 402 responses by:
 import { config } from "dotenv";
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { wrapFetchWithPayment } from "x402-fetch";
+import { wrapFetchWithPayment } from "@wtflabs/x402-fetch";
 import { baseSepolia } from "viem/chains";
 
 config();

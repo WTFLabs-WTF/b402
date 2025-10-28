@@ -46,7 +46,7 @@ const facilitator = createFacilitatorConfig("your-cdp-api-key-id", "your-cdp-api
 
 ```typescript
 import express from "express";
-import { paymentMiddleware } from "x402-express";
+import { paymentMiddleware } from "@wtflabs/x402-express";
 import { facilitator } from "@coinbase/x402";
 
 const app = express();

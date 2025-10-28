@@ -4,7 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia, base } from 'viem/chains';
 import { SiweMessage } from 'siwe';
 import _fetch from 'node-fetch'; // Using ESM-compatible import for node-fetch
-import { wrapFetchWithPayment, decodeXPaymentResponse } from 'x402-fetch';
+import { wrapFetchWithPayment, decodeXPaymentResponse } from '@wtflabs/x402-fetch';
 import { fileURLToPath } from 'url';
 
 // --- Environment Variable Loading ---
@@ -23,7 +23,7 @@ if (!CLIENT_SIM_PRIVATE_KEY) {
 // --- Main Client Simulation Function ---
 async function runClientDemo() {
   console.log('\n🚀 --- Starting Client Simulation --- 🚀');
-  
+
   // Setup client wallet from private key (for demo purposes)
   // In a real app, this would come from a browser wallet extension (e.g., MetaMask)
   const clientWalletAccount = privateKeyToAccount(CLIENT_SIM_PRIVATE_KEY);
@@ -50,7 +50,7 @@ async function runClientDemo() {
     const siweMessageParams = {
       domain: 'localhost', // IMPORTANT: Should match the domain the server expects/verifies
       address: clientWalletAddress,
-      statement: 'Sign in with Ethereum to the demo app.', 
+      statement: 'Sign in with Ethereum to the demo app.',
       uri: serverBaseUrl, // The URI a user is logging into
       version: '1', // SIWE version
       chainId: chainId, // Chain ID
@@ -64,12 +64,12 @@ async function runClientDemo() {
 
     // 1c. Client signs the SIWE message (simulating wallet interaction)
     const signature = await clientWalletAccount.signMessage({ message: messageToSign });
-    console.log(`[ClientSim]   ✅ SIWE Message signed. Signature: ${signature.substring(0,10)}...`);
+    console.log(`[ClientSim]   ✅ SIWE Message signed. Signature: ${signature.substring(0, 10)}...`);
 
     // 1d. Client sends the SIWE message and signature to the server for verification
     console.log(`[ClientSim]   Verifying signature with server at ${serverBaseUrl}/auth/verify-siwe...`);
     const verifyResponse = await _fetch(`${serverBaseUrl}/auth/verify-siwe`, {
-      method: 'POST', 
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: messageToSign, signature }), // Send the message string client signed
     });
@@ -97,9 +97,9 @@ async function runClientDemo() {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${jwtToken}` }, // Include JWT for authentication
       });
-      
+
       const x402RespHeader = response.headers.get('x-payment-response');
-      
+
       if (!response.ok) {
         // This block might be hit if x402-fetch fails to handle the 402 automatically, or for other errors.
         const errText = await response.text();
@@ -108,7 +108,7 @@ async function runClientDemo() {
         if (x402RespHeader) console.error('[ClientSim]   x-payment-response (on error):', decodeXPaymentResponse(x402RespHeader));
         throw new Error(`Authenticated /demo-weather call failed: ${response.status}`);
       }
-      
+
       const weatherData = await response.json();
       console.log('[ClientSim]   ✅ Weather data (authenticated):', weatherData);
       if (x402RespHeader) {
@@ -125,7 +125,7 @@ async function runClientDemo() {
   console.log('\n🔄 [ClientSim] Step 3: Calling /demo-weather WITHOUT JWT (expecting $0.10 price from server)...');
   try {
     const response = await fetchWithClientPayment(`${serverBaseUrl}/demo-weather`, { method: 'GET' });
-    
+
     const x402RespHeader = response.headers.get('x-payment-response');
 
     if (!response.ok) {
@@ -134,7 +134,7 @@ async function runClientDemo() {
       if (x402RespHeader) console.error('[ClientSim]   x-payment-response (on error):', decodeXPaymentResponse(x402RespHeader));
       throw new Error(`Unauthenticated /demo-weather call failed: ${response.status}`);
     }
-    
+
     const weatherData = await response.json();
     console.log('[ClientSim]   ✅ Weather data (unauthenticated):', weatherData);
     if (x402RespHeader) {
@@ -154,8 +154,8 @@ const currentFilePath = fileURLToPath(import.meta.url);
 // For `tsx src/client.ts`, `tsx` might make `process.argv[1]` point to `.../src/client.ts` or the tsx shim.
 // A more robust check might involve `endsWith` if paths differ slightly during dev (tsx) vs prod (node).
 if (process.argv[1] && fileURLToPath(`file://${process.argv[1]}`) === currentFilePath) {
-    runClientDemo().catch(err => {
-        console.error("💥 Client Simulation CRASHED:", err);
-        process.exit(1); // Exit with error code if client demo crashes
-    });
+  runClientDemo().catch(err => {
+    console.error("💥 Client Simulation CRASHED:", err);
+    process.exit(1); // Exit with error code if client demo crashes
+  });
 } 

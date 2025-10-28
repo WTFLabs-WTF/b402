@@ -4,7 +4,7 @@ import {
   withPaymentInterceptor,
   decodeXPaymentResponse,
   createSigner,
-} from "x402-axios";
+} from "@wtflabs/x402-axios";
 
 config();
 

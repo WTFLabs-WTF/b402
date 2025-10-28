@@ -6,7 +6,7 @@ import {
   createSigner,
   type Hex,
   MultiNetworkSigner,
-} from "x402-axios";
+} from "@wtflabs/x402-axios";
 
 config();
 
