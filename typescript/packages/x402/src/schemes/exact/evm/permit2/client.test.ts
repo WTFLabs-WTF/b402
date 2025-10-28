@@ -43,7 +43,7 @@ describe("Permit2 preparePaymentHeader", () => {
     vi.useRealTimers();
   });
 
-  it("should create a valid unsigned Permit2 payment header", () => {
+  it("should create a valid unsigned Permit2 payment header with witness", () => {
     const result = preparePaymentHeader(mockFromAddress, 1, mockPaymentRequirements);
     const currentTime = Math.floor(Date.now() / 1000);
 
@@ -60,6 +60,7 @@ describe("Permit2 preparePaymentHeader", () => {
           token: mockPaymentRequirements.asset,
           amount: mockPaymentRequirements.maxAmountRequired,
           deadline: (currentTime + mockPaymentRequirements.maxTimeoutSeconds).toString(),
+          to: mockPaymentRequirements.payTo, // Witness field
         },
       },
     });
@@ -106,6 +107,16 @@ describe("Permit2 preparePaymentHeader", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((result.payload.authorization as any).value).toBeUndefined();
   });
+
+  it("should include witness 'to' field by default", () => {
+    const result = preparePaymentHeader(mockFromAddress, 1, mockPaymentRequirements);
+    expect(result.payload.authorization.to).toBe(mockPaymentRequirements.payTo);
+  });
+
+  it("witness 'to' field should match payTo address", () => {
+    const result = preparePaymentHeader(mockFromAddress, 1, mockPaymentRequirements);
+    expect(result.payload.authorization.to).toBe(mockPaymentRequirements.payTo);
+  });
 });
 
 describe("Permit2 signPaymentHeader", () => {
@@ -134,6 +145,7 @@ describe("Permit2 signPaymentHeader", () => {
         token: "0x1234567890123456789012345678901234567890" as `0x${string}`,
         amount: "1000000",
         deadline: "1704067495",
+        to: "0x1234567890123456789012345678901234567890" as `0x${string}`, // Witness field
       },
     },
   };
@@ -216,6 +228,14 @@ describe("Permit2 signPaymentHeader", () => {
       signPaymentHeader(client, mockPaymentRequirements, mockUnsignedHeader),
     ).rejects.toThrow("Signing failed");
   });
+
+  it("should preserve witness 'to' field in signed header", async () => {
+    const client = createTestClient();
+    const result = await signPaymentHeader(client, mockPaymentRequirements, mockUnsignedHeader);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((result.payload as any).authorization.to).toBe(mockUnsignedHeader.payload.authorization.to);
+  });
 });
 
 describe("Permit2 createPaymentHeader", () => {
@@ -249,7 +269,7 @@ describe("Permit2 createPaymentHeader", () => {
     });
   });
 
-  it("should create and encode a Permit2 payment header", async () => {
+  it("should create and encode a Permit2 payment header with witness", async () => {
     const client = createTestClient();
     const result = await createPaymentHeader(client, 1, mockPaymentRequirements);
 
@@ -268,6 +288,7 @@ describe("Permit2 createPaymentHeader", () => {
             token: mockPaymentRequirements.asset,
             amount: mockPaymentRequirements.maxAmountRequired,
             nonce: mockNonce,
+            to: mockPaymentRequirements.payTo, // Witness field
           }),
         }),
       }),

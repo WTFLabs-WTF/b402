@@ -1,10 +1,21 @@
-import { Account, Address, Chain, getAddress, Hex, Transport } from "viem";
+import {
+  Account,
+  Address,
+  Chain,
+  encodeAbiParameters,
+  getAddress,
+  Hex,
+  keccak256,
+  Transport,
+} from "viem";
 import { getNetworkId } from "../../../../shared";
 import { getERC20Balance, getERC20Allowance } from "../../../../shared/evm";
 import {
   permit2Types,
+  permit2WitnessTypes,
   permit2ABI,
   PERMIT2_ADDRESS,
+  WITNESS_TYPE_STRING,
   ConnectedClient,
   SignerWallet,
 } from "../../../../types/shared/evm";
@@ -17,7 +28,11 @@ import {
 import { SCHEME } from "../../../exact";
 
 /**
- * Verifies a Permit2 payment payload
+ * Verifies a Permit2 payment payload (with or without witness)
+ *
+ * Supports both witness and non-witness modes:
+ * - Witness mode: Verifies that the recipient address is bound to the signature
+ * - Non-witness mode: Uses standard PermitTransferFrom verification
  *
  * @param client - The public client used for blockchain interactions
  * @param payload - The signed payment payload containing permit2 parameters and signature
@@ -46,31 +61,67 @@ export async function verify<
   }
 
   const permit2Payload = payload.payload;
-  const { owner, spender, token, amount, deadline, nonce } = permit2Payload.authorization;
+  const { owner, spender, token, amount, deadline, nonce, to } = permit2Payload.authorization;
 
   const chainId = getNetworkId(payload.network);
   const tokenAddress = getAddress(token);
   const ownerAddress = getAddress(owner);
 
-  // Verify permit2 signature
-  const permit2TypedData = {
-    types: permit2Types,
-    domain: {
-      name: "Permit2",
-      chainId,
-      verifyingContract: PERMIT2_ADDRESS,
-    },
-    primaryType: "PermitTransferFrom" as const,
-    message: {
-      permitted: {
-        token: tokenAddress,
-        amount,
+  // Detect witness mode based on the presence of the `to` field
+  const hasWitness = !!to;
+
+  // If witness mode is enabled, verify that `to` matches `payTo`
+  if (hasWitness) {
+    if (getAddress(to!) !== getAddress(paymentRequirements.payTo as string)) {
+      return {
+        isValid: false,
+        invalidReason: "witness_recipient_mismatch",
+        payer: owner,
+      };
+    }
+  }
+
+  // Verify permit2 signature (witness or non-witness)
+  const permit2TypedData = hasWitness
+    ? {
+      types: permit2WitnessTypes,
+      domain: {
+        name: "Permit2",
+        chainId,
+        verifyingContract: PERMIT2_ADDRESS,
       },
-      spender: getAddress(spender),
-      nonce,
-      deadline,
-    },
-  };
+      primaryType: "PermitWitnessTransferFrom" as const,
+      message: {
+        permitted: {
+          token: tokenAddress,
+          amount,
+        },
+        spender: getAddress(spender),
+        nonce,
+        deadline,
+        witness: {
+          to: getAddress(to!),
+        },
+      },
+    }
+    : {
+      types: permit2Types,
+      domain: {
+        name: "Permit2",
+        chainId,
+        verifyingContract: PERMIT2_ADDRESS,
+      },
+      primaryType: "PermitTransferFrom" as const,
+      message: {
+        permitted: {
+          token: tokenAddress,
+          amount,
+        },
+        spender: getAddress(spender),
+        nonce,
+        deadline,
+      },
+    };
 
   const recoveredAddress = await client.verifyTypedData({
     address: ownerAddress,
@@ -81,7 +132,7 @@ export async function verify<
   if (!recoveredAddress) {
     return {
       isValid: false,
-      invalidReason: "invalid_permit2_signature",
+      invalidReason: hasWitness ? "invalid_permit2_witness_signature" : "invalid_permit2_signature",
       payer: owner,
     };
   }
@@ -153,7 +204,10 @@ export async function verify<
 }
 
 /**
- * Settles a Permit2 payment by calling permitTransferFrom()
+ * Settles a Permit2 payment by calling permitTransferFrom() or permitWitnessTransferFrom()
+ *
+ * Automatically selects the appropriate function based on whether the payment includes
+ * a witness (recipient address binding).
  *
  * @param wallet - The facilitator wallet that will execute the permit transfer
  * @param paymentPayload - The signed payment payload containing permit2 parameters and signature
@@ -190,33 +244,61 @@ export async function settle<transport extends Transport, chain extends Chain>(
     };
   }
 
-  const { owner, token, amount, deadline, nonce } = permit2Payload.authorization;
+  const { owner, token, amount, deadline, nonce, to } = permit2Payload.authorization;
   const tokenAddress = getAddress(token);
   const ownerAddress = getAddress(owner);
 
-  // Call permitTransferFrom on Permit2 contract
-  const tx = await wallet.writeContract({
-    address: PERMIT2_ADDRESS,
-    abi: permit2ABI,
-    functionName: "permitTransferFrom",
-    args: [
-      {
-        permitted: {
-          token: tokenAddress,
-          amount: BigInt(amount),
+  // Detect witness mode
+  const hasWitness = !!to;
+
+  // Call permitTransferFrom or permitWitnessTransferFrom on Permit2 contract
+  const tx = hasWitness
+    ? await wallet.writeContract({
+      address: PERMIT2_ADDRESS,
+      abi: permit2ABI,
+      functionName: "permitWitnessTransferFrom",
+      args: [
+        {
+          permitted: {
+            token: tokenAddress,
+            amount: BigInt(amount),
+          },
+          nonce: BigInt(nonce),
+          deadline: BigInt(deadline),
         },
-        nonce: BigInt(nonce),
-        deadline: BigInt(deadline),
-      },
-      {
-        to: paymentRequirements.payTo as Address,
-        requestedAmount: BigInt(amount),
-      },
-      ownerAddress,
-      permit2Payload.signature as Hex,
-    ],
-    chain: wallet.chain as Chain,
-  });
+        {
+          to: paymentRequirements.payTo as Address,
+          requestedAmount: BigInt(amount),
+        },
+        ownerAddress,
+        keccak256(encodeAbiParameters([{ type: "address", name: "to" }], [getAddress(to!)])),
+        WITNESS_TYPE_STRING,
+        permit2Payload.signature as Hex,
+      ],
+      chain: wallet.chain as Chain,
+    })
+    : await wallet.writeContract({
+      address: PERMIT2_ADDRESS,
+      abi: permit2ABI,
+      functionName: "permitTransferFrom",
+      args: [
+        {
+          permitted: {
+            token: tokenAddress,
+            amount: BigInt(amount),
+          },
+          nonce: BigInt(nonce),
+          deadline: BigInt(deadline),
+        },
+        {
+          to: paymentRequirements.payTo as Address,
+          requestedAmount: BigInt(amount),
+        },
+        ownerAddress,
+        permit2Payload.signature as Hex,
+      ],
+      chain: wallet.chain as Chain,
+    });
 
   const receipt = await wallet.waitForTransactionReceipt({ hash: tx });
 

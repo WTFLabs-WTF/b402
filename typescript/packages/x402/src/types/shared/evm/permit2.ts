@@ -31,6 +31,34 @@ export const permit2Types = {
 export const permit2PrimaryType = "PermitTransferFrom";
 
 /**
+ * Permit2 Witness Types for PermitWitnessTransferFrom
+ * This adds a witness field that binds the recipient address to the signature,
+ * preventing the facilitator from changing the payment destination.
+ */
+export const permit2WitnessTypes = {
+  PermitWitnessTransferFrom: [
+    { name: "permitted", type: "TokenPermissions" },
+    { name: "spender", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+    { name: "witness", type: "Witness" },
+  ],
+  TokenPermissions: [
+    { name: "token", type: "address" },
+    { name: "amount", type: "uint256" },
+  ],
+  Witness: [{ name: "to", type: "address" }],
+};
+
+export const permit2WitnessPrimaryType = "PermitWitnessTransferFrom";
+
+/**
+ * The witness type string that needs to be passed to permitWitnessTransferFrom
+ * Format: TypeName(field1Type field1Name,field2Type field2Name,...)
+ */
+export const WITNESS_TYPE_STRING = "Witness(address to)";
+
+/**
  * Permit2 Contract ABI
  */
 export const permit2ABI = [
@@ -101,6 +129,45 @@ export const permit2ABI = [
     name: "nonceBitmap",
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            components: [
+              { internalType: "address", name: "token", type: "address" },
+              { internalType: "uint256", name: "amount", type: "uint256" },
+            ],
+            internalType: "struct ISignatureTransfer.TokenPermissions",
+            name: "permitted",
+            type: "tuple",
+          },
+          { internalType: "uint256", name: "nonce", type: "uint256" },
+          { internalType: "uint256", name: "deadline", type: "uint256" },
+        ],
+        internalType: "struct ISignatureTransfer.PermitTransferFrom",
+        name: "permit",
+        type: "tuple",
+      },
+      {
+        components: [
+          { internalType: "address", name: "to", type: "address" },
+          { internalType: "uint256", name: "requestedAmount", type: "uint256" },
+        ],
+        internalType: "struct ISignatureTransfer.SignatureTransferDetails",
+        name: "transferDetails",
+        type: "tuple",
+      },
+      { internalType: "address", name: "owner", type: "address" },
+      { internalType: "bytes32", name: "witness", type: "bytes32" },
+      { internalType: "string", name: "witnessTypeString", type: "string" },
+      { internalType: "bytes", name: "signature", type: "bytes" },
+    ],
+    name: "permitWitnessTransferFrom",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
 ] as const;

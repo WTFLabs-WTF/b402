@@ -9,12 +9,15 @@ import { signPermit2 } from "./sign";
 import { encodePayment } from "../utils/paymentUtils";
 
 /**
- * Prepares an unsigned Permit2 payment header
+ * Prepares an unsigned Permit2 payment header with witness support
+ *
+ * By default, this function enables witness mode which binds the recipient address
+ * to the signature, preventing the facilitator from changing the payment destination.
  *
  * @param from - The token owner's address
  * @param x402Version - The version of the X402 protocol to use
  * @param paymentRequirements - The payment requirements containing scheme and network information
- * @returns An unsigned Permit2 payment payload containing permit2 authorization details
+ * @returns An unsigned Permit2 payment payload containing permit2 authorization details with witness
  */
 export function preparePaymentHeader(
   from: Address,
@@ -38,6 +41,7 @@ export function preparePaymentHeader(
         token: paymentRequirements.asset as Address,
         amount: paymentRequirements.maxAmountRequired,
         deadline,
+        to: paymentRequirements.payTo as Address, // Witness: bind recipient to signature
       },
     },
   };
@@ -45,6 +49,9 @@ export function preparePaymentHeader(
 
 /**
  * Signs a Permit2 payment header using the provided client and payment requirements.
+ *
+ * Supports both witness and non-witness modes based on the presence of the `to` field
+ * in the unsigned payment header.
  *
  * @param client - The signer wallet instance used to sign the permit2
  * @param paymentRequirements - The payment requirements containing scheme and network information
@@ -56,11 +63,11 @@ export async function signPaymentHeader<transport extends Transport, chain exten
   paymentRequirements: PaymentRequirements,
   unsignedPaymentHeader: UnsignedPermit2PaymentPayload,
 ): Promise<Permit2PaymentPayload> {
-  const { owner, spender, token, amount, deadline } = unsignedPaymentHeader.payload.authorization;
+  const { owner, spender, token, amount, deadline, to } = unsignedPaymentHeader.payload.authorization;
 
   const { signature, nonce } = await signPermit2(
     client,
-    { owner, spender, token, amount, deadline },
+    { owner, spender, token, amount, deadline, to },
     paymentRequirements,
   );
 
@@ -76,6 +83,7 @@ export async function signPaymentHeader<transport extends Transport, chain exten
         amount,
         deadline,
         nonce,
+        ...(to ? { to } : {}), // Include `to` field if present (witness mode)
       },
     },
   };

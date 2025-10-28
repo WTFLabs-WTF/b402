@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "client": "tsx client.ts",
+    "client:witness": "tsx client-witness.ts",
     "resource": "tsx resource.ts"
   },
   "dependencies": {

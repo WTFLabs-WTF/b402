@@ -93,11 +93,19 @@ cd ../facilitator
 pnpm dev
 ```
 
-## Running the Example
+## Running the Examples
 
+### Basic Permit2 Example
 ```bash
 pnpm run client
 ```
+
+### Permit2 WITH WITNESS Example 🛡️
+```bash
+pnpm run client:witness
+```
+
+The witness example demonstrates enhanced security by binding the recipient address to the signature.
 
 ## How It Works
 
@@ -207,9 +215,112 @@ Permit2 works with **ANY ERC20 token**, including:
 - [Permit2 Contract Address](https://etherscan.io/address/0x000000000022D473030F116dDEE9F6B43aC78BA3)
 - [Integration Guide](https://docs.uniswap.org/contracts/permit2/overview)
 
+## Permit2 Witness Protection 🛡️
+
+### What is Witness?
+
+Witness is an enhanced security feature in Permit2 that allows you to bind additional data (like the recipient address) to your signature. This prevents the facilitator from changing where your tokens are sent.
+
+### How It Works
+
+**Without Witness (Traditional):**
+```typescript
+// User signs: "Allow facilitator to transfer my tokens"
+// ❌ Facilitator can send tokens to ANY address
+```
+
+**With Witness (Enhanced):**
+```typescript
+// User signs: "Allow facilitator to transfer my tokens TO 0xRecipient..."
+// ✅ Facilitator MUST send tokens to this specific address
+// ✅ Any attempt to change recipient will fail
+```
+
+### Security Benefits
+
+🔒 **Cryptographic Binding** - Recipient address is bound to signature  
+👁️ **Full Transparency** - User sees exact recipient when signing  
+🚫 **Prevents Tampering** - Facilitator cannot change the recipient  
+⛽ **Zero Gas Cost** - No additional gas compared to regular Permit2  
+🔄 **Backward Compatible** - Works alongside regular Permit2  
+
+### Witness Example Code
+
+```typescript
+// Sign with witness
+const signature = await wallet.signTypedData({
+  domain: {
+    name: "Permit2",
+    chainId,
+    verifyingContract: PERMIT2_ADDRESS,
+  },
+  types: {
+    PermitWitnessTransferFrom: [
+      { name: "permitted", type: "TokenPermissions" },
+      { name: "spender", type: "address" },
+      { name: "nonce", type: "uint256" },
+      { name: "deadline", type: "uint256" },
+      { name: "witness", type: "Witness" },  // ← Witness field
+    ],
+    TokenPermissions: [
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    Witness: [
+      { name: "to", type: "address" },  // ← Recipient address
+    ],
+  },
+  message: {
+    permitted: { token, amount },
+    spender: facilitatorAddress,
+    nonce,
+    deadline,
+    witness: {
+      to: recipientAddress,  // ← Bound to signature
+    },
+  },
+});
+
+// Create payment payload with witness
+const paymentPayload = {
+  x402Version: 1,
+  scheme: "exact",
+  network: "base-sepolia",
+  payload: {
+    authorizationType: "permit2",
+    signature,
+    authorization: {
+      owner: clientAddress,
+      spender: facilitatorAddress,
+      token: tokenAddress,
+      amount: paymentAmount,
+      deadline: expirationTime,
+      nonce: currentNonce,
+      to: recipientAddress,  // ← Witness field in payload
+    },
+  },
+};
+```
+
+### Try the Witness Demo
+
+Run the witness example to see the protection in action:
+
+```bash
+pnpm run client:witness
+```
+
+The demo will:
+1. ✅ Explain witness protection concept
+2. ✅ Create a witness-protected signature
+3. ✅ Show the recipient address binding
+4. ✅ Demonstrate protection against tampering
+5. ✅ Verify successful settlement to correct address
+
 ## Next Steps
 
+- ✅ Try the witness protection example (`pnpm run client:witness`)
 - Integrate batch transfers (multiple tokens in one payment)
 - Use with any ERC20 token
-- Explore advanced Permit2 features (witness data, etc.)
+- Combine witness with custom data structures
 

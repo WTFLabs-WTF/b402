@@ -1,16 +1,22 @@
-import { Chain, getAddress, Hex, LocalAccount, Transport } from "viem";
+import { Chain, getAddress, Hex, keccak256, LocalAccount, toHex, Transport } from "viem";
 import { getNetworkId } from "../../../../shared";
 import {
   permit2Types,
+  permit2WitnessTypes,
   permit2ABI,
   PERMIT2_ADDRESS,
+  WITNESS_TYPE_STRING,
   isSignerWallet,
   SignerWallet,
 } from "../../../../types/shared/evm";
 import { Permit2EvmPayloadAuthorization, PaymentRequirements } from "../../../../types/verify";
 
 /**
- * Signs a Permit2 PermitTransferFrom authorization
+ * Signs a Permit2 authorization (PermitTransferFrom or PermitWitnessTransferFrom)
+ *
+ * Automatically detects witness mode based on the presence of the `to` field.
+ * - If `to` is provided: Uses PermitWitnessTransferFrom (binds recipient to signature)
+ * - If `to` is omitted: Uses PermitTransferFrom (legacy mode)
  *
  * @param walletClient - The wallet client that will sign the permit
  * @param params - The permit2 parameters
@@ -19,13 +25,14 @@ import { Permit2EvmPayloadAuthorization, PaymentRequirements } from "../../../..
  * @param params.token - The address of the token to transfer
  * @param params.amount - The amount of tokens to transfer (in base units)
  * @param params.deadline - Unix timestamp after which the permit is no longer valid
+ * @param params.to - Optional recipient address for witness mode
  * @param paymentRequirements - The payment requirements containing network information
  * @param paymentRequirements.network - The network where the token exists
  * @returns The signature and nonce for the permit2
  */
 export async function signPermit2<transport extends Transport, chain extends Chain>(
   walletClient: SignerWallet<chain, transport> | LocalAccount,
-  { owner, spender, token, amount, deadline }: Omit<Permit2EvmPayloadAuthorization, "nonce">,
+  { owner, spender, token, amount, deadline, to }: Omit<Permit2EvmPayloadAuthorization, "nonce">,
   { network }: PaymentRequirements,
 ): Promise<{ signature: Hex; nonce: string }> {
   const chainId = getNetworkId(network);
@@ -36,27 +43,53 @@ export async function signPermit2<transport extends Transport, chain extends Cha
   // Generate a unique nonce for Permit2 SignatureTransfer
   const nonce = await createPermit2Nonce(walletClient, ownerAddress);
 
-  const data = {
-    types: permit2Types,
-    domain: {
-      name: "Permit2",
-      chainId,
-      verifyingContract: PERMIT2_ADDRESS,
-    },
-    primaryType: "PermitTransferFrom" as const,
-    message: {
-      permitted: {
-        token: tokenAddress,
-        amount: BigInt(amount),
+  // Detect witness mode based on the presence of the `to` field
+  const hasWitness = !!to;
+
+  const data = hasWitness
+    ? {
+      types: permit2WitnessTypes,
+      domain: {
+        name: "Permit2",
+        chainId,
+        verifyingContract: PERMIT2_ADDRESS,
       },
-      spender: spenderAddress,
-      nonce,
-      deadline: BigInt(deadline),
-    },
-  };
+      primaryType: "PermitWitnessTransferFrom" as const,
+      message: {
+        permitted: {
+          token: tokenAddress,
+          amount: BigInt(amount),
+        },
+        spender: spenderAddress,
+        nonce,
+        deadline: BigInt(deadline),
+        witness: {
+          to: getAddress(to!),
+        },
+      },
+    }
+    : {
+      types: permit2Types,
+      domain: {
+        name: "Permit2",
+        chainId,
+        verifyingContract: PERMIT2_ADDRESS,
+      },
+      primaryType: "PermitTransferFrom" as const,
+      message: {
+        permitted: {
+          token: tokenAddress,
+          amount: BigInt(amount),
+        },
+        spender: spenderAddress,
+        nonce,
+        deadline: BigInt(deadline),
+      },
+    };
 
   if (isSignerWallet(walletClient)) {
-    const signature = await walletClient.signTypedData(data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const signature = await walletClient.signTypedData(data as any);
     return {
       signature,
       nonce: nonce.toString(),
@@ -66,7 +99,8 @@ export async function signPermit2<transport extends Transport, chain extends Cha
   // LocalAccount with signTypedData
   const account = walletClient as LocalAccount;
   if (account.signTypedData) {
-    const signature = await account.signTypedData(data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const signature = await account.signTypedData(data as any);
     return {
       signature,
       nonce: nonce.toString(),

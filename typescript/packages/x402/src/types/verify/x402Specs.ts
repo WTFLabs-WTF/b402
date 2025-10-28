@@ -57,6 +57,8 @@ export const ErrorReasons = [
   "invalid_authorization_type",
   "invalid_permit_signature",
   "invalid_permit2_signature",
+  "invalid_permit2_witness_signature",
+  "witness_recipient_mismatch",
   "permit_expired",
   "permit2_expired",
   "permit2_not_approved",
@@ -64,6 +66,7 @@ export const ErrorReasons = [
   "invalid_spender_address",
   "token_mismatch",
   "insufficient_payment_amount",
+  "insufficient_token_balance",
   "transaction_failed",
   "settlement_failed",
 ] as const;
@@ -124,6 +127,7 @@ export const Permit2EvmPayloadAuthorizationSchema = z.object({
   amount: z.string().refine(isInteger).refine(hasMaxLength(EvmMaxAtomicUnits)),
   deadline: z.string().refine(isInteger),
   nonce: z.string().refine(isInteger),
+  to: z.string().regex(EvmAddressRegex).optional(), // Witness: binds recipient address to signature
 });
 export type Permit2EvmPayloadAuthorization = z.infer<typeof Permit2EvmPayloadAuthorizationSchema>;
 
