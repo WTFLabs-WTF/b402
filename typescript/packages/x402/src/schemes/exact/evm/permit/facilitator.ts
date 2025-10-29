@@ -117,13 +117,13 @@ export async function verify<
     };
   }
 
-  // Verify spender matches the facilitator's wallet address or proxy executor
+  // Verify spender matches the facilitator's wallet address or relayer
   // In x402, the facilitator acts as the spender to execute transferFrom
   // The client must authorize the facilitator's wallet address as the spender
-  // If proxy is used, verify the spender matches the proxy executor
-  if (paymentRequirements.extra?.proxyAddress) {
-    // When using proxy, the spender should be the proxy executor
-    if (getAddress(spender) !== getAddress(paymentRequirements.extra?.proxyAddress)) {
+  // If relayer is used, verify the spender matches the relayer
+  if (paymentRequirements.extra?.relayer) {
+    // When using relayer, the spender should be the relayer
+    if (getAddress(spender) !== getAddress(paymentRequirements.extra?.relayer)) {
       return {
         isValid: false,
         invalidReason: "invalid_spender_address",
@@ -131,7 +131,7 @@ export async function verify<
       };
     }
   } else {
-    // When not using proxy, the spender should be the facilitator's wallet
+    // When not using relayer, the spender should be the facilitator's wallet
     if (client.account && getAddress(spender) !== getAddress(client.account.address)) {
       return {
         isValid: false,
@@ -215,10 +215,10 @@ export async function settle<transport extends Transport, chain extends Chain>(
 
   let transactionHash: Hex;
 
-  if (paymentRequirements.extra?.proxyAddress) {
-    // 使用 proxy 合约执行 permit + transfer
+  if (paymentRequirements.extra?.relayer) {
+    // 使用 relayer 合约执行 permit + transfer
     transactionHash = await wallet.writeContract({
-      address: paymentRequirements.extra.proxyAddress as Address,
+      address: paymentRequirements.extra.relayer as Address,
       abi: permitProxyContractABI,
       functionName: "permitAndTransfer",
       args: [
