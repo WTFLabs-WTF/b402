@@ -1,4 +1,13 @@
-import { Account, Address, Chain, getAddress, Hex, parseErc6492Signature, Transport } from "viem";
+import {
+  Account,
+  Address,
+  Chain,
+  getAddress,
+  Hex,
+  parseErc6492Signature,
+  Transport,
+  hexToSignature,
+} from "viem";
 import { getNetworkId } from "../../../../shared";
 import { getVersion, getERC20Balance } from "../../../../shared/evm";
 import {
@@ -16,6 +25,7 @@ import {
   Eip3009PaymentPayload,
 } from "../../../../types/verify";
 import { SCHEME } from "../../../exact";
+import { permitProxyContractABI } from "../../../../types/shared/evm/permitProxyABI";
 
 /**
  * Verifies an EIP-3009 payment payload against the required payment details
@@ -124,7 +134,10 @@ export async function verify<
   }
 
   // Verify that payment was made to the correct address
-  if (getAddress(exactEvmPayload.authorization.to) !== getAddress(paymentRequirements.payTo)) {
+  if (
+    getAddress(exactEvmPayload.authorization.to) !== getAddress(paymentRequirements.payTo) &&
+    getAddress(exactEvmPayload.authorization.to) !== getAddress(paymentRequirements.extra?.relayer)
+  ) {
     return {
       isValid: false,
       invalidReason: "invalid_exact_evm_payload_recipient_mismatch",
@@ -224,21 +237,54 @@ export async function settle<transport extends Transport, chain extends Chain>(
   // Returns the original signature (no-op) if the signature is not a 6492 signature
   const { signature } = parseErc6492Signature(payload.signature as Hex);
 
-  const tx = await wallet.writeContract({
-    address: paymentRequirements.asset as Address,
-    abi,
-    functionName: "transferWithAuthorization" as const,
-    args: [
-      payload.authorization.from as Address,
-      payload.authorization.to as Address,
-      BigInt(payload.authorization.value),
-      BigInt(payload.authorization.validAfter),
-      BigInt(payload.authorization.validBefore),
-      payload.authorization.nonce as Hex,
-      signature,
-    ],
-    chain: wallet.chain as Chain,
-  });
+  let tx: Hex;
+
+  if (paymentRequirements.extra?.relayer) {
+    // 使用 relayer 合约执行 settleWithERC3009
+    // 新合约会处理 transferWithAuthorization，并可能收取手续费
+
+    // 拆分签名为 v, r, s
+    const sig = hexToSignature(signature);
+    const v = Number(sig.v); // 确保 v 是 number 类型 (uint8)
+    const r = sig.r;
+    const s = sig.s;
+
+    tx = await wallet.writeContract({
+      address: paymentRequirements.extra.relayer as Address,
+      abi: permitProxyContractABI,
+      functionName: "settleWithERC3009",
+      args: [
+        paymentRequirements.asset as Address, // token
+        payload.authorization.from as Address, // payer
+        payload.authorization.to as Address, // seller
+        BigInt(payload.authorization.value), // amount
+        BigInt(payload.authorization.validAfter), // validAfter
+        BigInt(payload.authorization.validBefore), // validBefore
+        payload.authorization.nonce as Hex, // nonce
+        v, // v (uint8)
+        r, // r (bytes32)
+        s, // s (bytes32)
+      ],
+      chain: wallet.chain as Chain,
+    });
+  } else {
+    // 原有的直接调用 transferWithAuthorization 逻辑
+    tx = await wallet.writeContract({
+      address: paymentRequirements.asset as Address,
+      abi,
+      functionName: "transferWithAuthorization" as const,
+      args: [
+        payload.authorization.from as Address,
+        payload.authorization.to as Address,
+        BigInt(payload.authorization.value),
+        BigInt(payload.authorization.validAfter),
+        BigInt(payload.authorization.validBefore),
+        payload.authorization.nonce as Hex,
+        signature,
+      ],
+      chain: wallet.chain as Chain,
+    });
+  }
 
   const receipt = await wallet.waitForTransactionReceipt({ hash: tx });
 

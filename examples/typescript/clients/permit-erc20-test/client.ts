@@ -28,7 +28,7 @@ if (!clientPrivateKey || !providerUrl) {
 const RESOURCE_SERVER_URL = "http://localhost:4024"; // Different port for Permit example
 const USDC_ADDRESS = "0x03dB069489e2cAA4e51ED149E83D732EF3931670" as Address; // USDC
 const PAYMENT_AMOUNT = parseEther("0.05").toString(); // 0.05 USDC (50000 wei, assuming 6 decimals
-const FACILITATOR_WALLET_ADDRESS = "0xe4bb3CB99F7C9c876544d7b0DB481036Baf4aBcD" as Address;
+const FACILITATOR_WALLET_ADDRESS = "0x877D0A51a37178b5F34Ffb68a5c2beD0ff46D432" as Address;
 
 // Setup client wallet
 const clientAccount = privateKeyToAccount(clientPrivateKey as Hex);

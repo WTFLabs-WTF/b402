@@ -55,7 +55,7 @@ function getX402Server(): X402Server {
 
     const facilitator = new Facilitator({
       recipientAddress,
-      relayer: "0xe4bb3CB99F7C9c876544d7b0DB481036Baf4aBcD",
+      relayer: "0x877D0A51a37178b5F34Ffb68a5c2beD0ff46D432",
       waitUntil: "confirmed",
       baseUrl: process.env.FACILITATOR_URL,
       apiKey: process.env.FACILITATOR_API_KEY,

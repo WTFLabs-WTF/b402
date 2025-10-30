@@ -5,7 +5,7 @@ import { z } from "zod";
  */
 export const PaymentTypeSchema = z.enum([
   "permit",
-  "transferWithAuthorization",
+  "eip3009",
   "permit2",
 ]);
 
@@ -70,7 +70,6 @@ export type X402PaymentSchemaConfig = z.infer<
 export type X402PaymentSchemaWithExtra = X402PaymentSchemaConfig & {
   extra?: {
     relayer?: string;
-    recipientAddress?: string;
     [key: string]: any;
   };
 };

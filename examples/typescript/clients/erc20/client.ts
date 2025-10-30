@@ -9,9 +9,8 @@ import {
   createWalletClient,
   type Hex,
   type Address,
-  parseEther,
 } from "viem";
-import axios from "axios";
+import { wrapFetchWithPayment } from "@wtflabs/x402-fetch";
 
 // Load environment variables
 const __filename = fileURLToPath(import.meta.url);
@@ -33,10 +32,6 @@ if (!clientPrivateKey || !providerUrl) {
 
 // Constants
 const RESOURCE_SERVER_URL = "http://localhost:4025"; // Different port for this example
-const USDC_ADDRESS = "0x03db069489e2caa4e51ed149e83d732ef3931670" as Address; // USDC on Base Sepolia
-const PAYMENT_AMOUNT = parseEther("0.05"); // 0.05 USDC (50000 wei, assuming 6 decimals)
-const FACILITATOR_WALLET_ADDRESS =
-  "0xe4bb3CB99F7C9c876544d7b0DB481036Baf4aBcD" as Address;
 
 // Setup client wallet
 const clientAccount = privateKeyToAccount(clientPrivateKey as Hex);
@@ -46,214 +41,58 @@ const clientWallet = createWalletClient({
   transport: http(providerUrl),
 }).extend(publicActions);
 
-/**
- * Create an x402 payment header using EIP-2612 Permit
- */
-async function createPermitPaymentHeader() {
-  console.log(`\n🔐 Creating Permit payment header...`);
-  console.log(`   Client: ${clientAccount.address}`);
-  console.log(`   Token: ${USDC_ADDRESS}`);
-  console.log(`   Amount: ${PAYMENT_AMOUNT}`);
-
-  // Get current nonce from token contract
-  const nonce = await clientWallet.readContract({
-    address: USDC_ADDRESS,
-    abi: [
-      {
-        inputs: [{ name: "owner", type: "address" }],
-        name: "nonces",
-        outputs: [{ name: "", type: "uint256" }],
-        stateMutability: "view",
-        type: "function",
-      },
-    ],
-    functionName: "nonces",
-    args: [clientAccount.address],
-  });
-
-  console.log(`   Current nonce: ${nonce}`);
-
-  // Get token name for EIP-712 domain
-  const tokenName = await clientWallet.readContract({
-    address: USDC_ADDRESS,
-    abi: [
-      {
-        inputs: [],
-        name: "name",
-        outputs: [{ name: "", type: "string" }],
-        stateMutability: "view",
-        type: "function",
-      },
-    ],
-    functionName: "name",
-  });
-
-  // Get token version for EIP-712 domain
-  let tokenVersion = "1";
-  try {
-    const domainResult = await clientWallet.readContract({
-      address: USDC_ADDRESS,
-      abi: [
-        {
-          inputs: [],
-          name: "eip712Domain",
-          outputs: [
-            { name: "fields", type: "bytes1" },
-            { name: "name", type: "string" },
-            { name: "version", type: "string" },
-            { name: "chainId", type: "uint256" },
-            { name: "verifyingContract", type: "address" },
-            { name: "salt", type: "bytes32" },
-            { name: "extensions", type: "uint256[]" },
-          ],
-          stateMutability: "view",
-          type: "function",
-        },
-      ],
-      functionName: "eip712Domain",
-    });
-    tokenVersion = domainResult[2]; // version is the 3rd element
-  } catch {
-    try {
-      tokenVersion = (await clientWallet.readContract({
-        address: USDC_ADDRESS,
-        abi: [
-          {
-            inputs: [],
-            name: "version",
-            outputs: [{ name: "", type: "string" }],
-            stateMutability: "view",
-            type: "function",
-          },
-        ],
-        functionName: "version",
-      })) as string;
-    } catch {
-      console.log(
-        `   ⚠️  Neither eip712Domain() nor version() available, using default: ${tokenVersion}`,
-      );
-    }
-  }
-
-  console.log(`   Token: ${tokenName} v${tokenVersion}`);
-
-  const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-  const spender = FACILITATOR_WALLET_ADDRESS;
-
-  // Sign the permit
-  const domain = {
-    name: tokenName as string,
-    version: tokenVersion,
-    chainId: bscTestnet.id,
-    verifyingContract: USDC_ADDRESS,
-  };
-
-  const types = {
-    Permit: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" },
-      { name: "value", type: "uint256" },
-      { name: "nonce", type: "uint256" },
-      { name: "deadline", type: "uint256" },
-    ],
-  };
-
-  const message = {
-    owner: clientAccount.address,
-    spender: spender,
-    value: BigInt(PAYMENT_AMOUNT),
-    nonce: nonce as bigint,
-    deadline: BigInt(deadline),
-  };
-
-  const signature = await clientWallet.signTypedData({
-    domain,
-    types,
-    primaryType: "Permit",
-    message,
-  });
-
-  console.log(`   ✅ Permit signed!`);
-
-  // Create x402 payment payload
-  const paymentPayload = {
-    x402Version: 1,
-    scheme: "exact",
-    network: "bsc-testnet",
-    payload: {
-      authorizationType: "permit",
-      signature,
-      authorization: {
-        owner: clientAccount.address,
-        spender,
-        value: PAYMENT_AMOUNT.toString(),
-        deadline: deadline.toString(),
-        nonce: nonce.toString(),
-      },
-    },
-  };
-
-  // Encode as base64
-  const paymentHeader = Buffer.from(JSON.stringify(paymentPayload)).toString(
-    "base64",
-  );
-  return paymentHeader;
-}
+// Create a fetch function with x402 payment support
+const fetchWithPay = wrapFetchWithPayment(
+  fetch,
+  clientWallet,
+  BigInt(50000) // Max 0.1 USDC
+);
 
 /**
- * Make a request to a resource server with x402 Permit payment
+ * Make a request to a resource server using x402-fetch
+ * The payment handling is automatic!
  */
 async function makePaymentRequest() {
   try {
     console.log(`\n🚀 Making request to resource server...`);
+    console.log(`   Client: ${clientAccount.address}`);
 
-    // First request - should get 402 Payment Required
-    let response = await axios.post(
+    // Make request - x402-fetch will automatically handle 402 responses
+    const response = await fetchWithPay(
       `${RESOURCE_SERVER_URL}/protected-resource`,
-      {},
-      { validateStatus: () => true },
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      },
     );
 
-    if (response.status === 402) {
-      console.log(`\n💰 402 Payment Required`);
-      console.log(`   Payment details:`, response.data.accepts[0]);
-
-      // Create and attach payment header
-      const paymentHeader = await createPermitPaymentHeader();
-
-      // Retry with payment
-      console.log(`\n🔄 Retrying with payment...`);
-      response = await axios.post(
-        `${RESOURCE_SERVER_URL}/protected-resource`,
-        {},
-        {
-          headers: {
-            "X-PAYMENT": paymentHeader,
-          },
-        },
-      );
-    }
-
-    if (response.status === 200) {
+    if (response.ok) {
+      const data = await response.json();
       console.log(`\n✅ Success!`);
-      console.log(`   Response:`, response.data);
+      console.log(`   Response:`, data);
     } else {
       console.error(`\n❌ Request failed with status ${response.status}`);
-      console.error(`   Error:`, response.data);
+      const error = await response.text();
+      console.error(`   Error:`, error);
     }
   } catch (error: any) {
     console.error(`\n❌ Error:`, error.message);
-    if (error.response) {
-      console.error(`   Status:`, error.response.status);
-      console.error(`   Data:`, error.response.data);
-    }
   }
 }
 
 // Run the example
 console.log(`\n═══════════════════════════════════════════`);
-console.log(`   ERC20 x402 Example (New Packages)`);
+console.log(`   ERC20 x402 Example (x402-fetch)`);
 console.log(`═══════════════════════════════════════════`);
+console.log(`\n💡 Payment type will be automatically detected from server response`);
+console.log(`   - EIP-3009 (default)`);
+console.log(`   - EIP-2612 Permit (if server specifies)`);
+console.log(`   - Permit2 (if server specifies)`);
 
-makePaymentRequest().catch(console.error);
+(async () => {
+  await makePaymentRequest();
+})().catch(console.error);
 

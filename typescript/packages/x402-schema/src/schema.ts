@@ -95,7 +95,7 @@ export class X402PaymentSchema {
    * 获取完整配置
    * @returns 完整的 schema 配置
    */
-  getConfig(): X402PaymentSchemaWithExtra {
+  toJSON(): X402PaymentSchemaWithExtra {
     return { ...this.config };
   }
 
@@ -116,14 +116,6 @@ export class X402PaymentSchema {
    */
   getExtra(): Record<string, any> | undefined {
     return this.config.extra;
-  }
-
-  /**
-   * 转换为 JSON
-   * @returns JSON 对象
-   */
-  toJSON(): X402PaymentSchemaWithExtra {
-    return this.getConfig();
   }
 }
 

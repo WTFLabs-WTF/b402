@@ -216,21 +216,21 @@ export async function settle<transport extends Transport, chain extends Chain>(
   let transactionHash: Hex;
 
   if (paymentRequirements.extra?.relayer) {
-    // 使用 relayer 合约执行 permit + transfer
+    // 使用 relayer 合约执行 settleWithPermit
+    // 新合约会处理 permit 和 transfer，并可能收取手续费
     transactionHash = await wallet.writeContract({
       address: paymentRequirements.extra.relayer as Address,
       abi: permitProxyContractABI,
-      functionName: "permitAndTransfer",
+      functionName: "settleWithPermit",
       args: [
-        tokenAddress,
-        owner as Address,
-        spender as Address,
-        BigInt(value),
-        BigInt(deadline),
-        v,
-        r,
-        s,
-        paymentRequirements.payTo as Address,
+        tokenAddress, // token
+        owner as Address, // payer
+        paymentRequirements.payTo as Address, // seller
+        BigInt(value), // amount
+        BigInt(deadline), // deadline
+        v, // v
+        r, // r
+        s, // s
       ],
       chain: wallet.chain as Chain,
       nonce: txNonce,

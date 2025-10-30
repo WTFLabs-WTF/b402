@@ -47,7 +47,7 @@ const paymentDetails = {
     }
   },
   extra: {
-    feePayer: '0xe4bb3CB99F7C9c876544d7b0DB481036Baf4aBcD',
+    feePayer: '0x877D0A51a37178b5F34Ffb68a5c2beD0ff46D432',
   },
 };
 

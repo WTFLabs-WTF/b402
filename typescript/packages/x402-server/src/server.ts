@@ -1,5 +1,5 @@
 import type { Facilitator } from "@wtflabs/x402-facilitator";
-import type { X402PaymentSchema } from "@wtflabs/x402-schema";
+import type { X402PaymentSchema, X402PaymentSchemaWithExtra } from "@wtflabs/x402-schema";
 import type { PublicClient } from "viem";
 import type {
   InitializeResult,
@@ -7,6 +7,8 @@ import type {
   VerifyResult,
   X402ServerConfig,
 } from "./types";
+import { PaymentPayload, PaymentRequirements } from "@wtflabs/x402/types";
+import { detectTokenPaymentMethods, getRecommendedPaymentMethod, getTokenInfo, type PaymentMethod } from "./token-detection";
 
 /**
  * X402Server 类
@@ -72,16 +74,46 @@ export class X402Server {
   /**
    * 初始化服务器
    * 初始化和校验 schema 等数据，对 schema 增加 facilitator 数据 extra: {relayer}
+   * 并获取 token 的 name 和 version 信息
    */
   async initialize(): Promise<InitializeResult> {
     try {
       // 验证 schema
       this.schema.verify();
 
-      // 将 facilitator 的 relayer 添加到 schema 的 extra 中
-      this.schema.setExtra({
-        relayer: this.facilitator.relayer,
-      });
+      // 获取 token 信息（name 和 version）并添加到 schema extra 中
+      const schemaAsset = this.schema.get("asset");
+      if (schemaAsset) {
+        try {
+          const tokenInfo = await getTokenInfo(schemaAsset, this.client);
+          this.schema.setExtra({
+            relayer: this.facilitator.relayer,
+            name: tokenInfo.name,
+            version: tokenInfo.version,
+          });
+          console.log(`✅ Token info retrieved: ${tokenInfo.name} v${tokenInfo.version}`);
+        } catch (error) {
+          console.warn(`⚠️  Failed to get token info, signatures may fail:`, error);
+          // 仍然设置 relayer，但没有 name 和 version
+          this.schema.setExtra({
+            relayer: this.facilitator.relayer,
+          });
+        }
+      } else {
+        // 如果没有 asset，只设置 relayer
+        this.schema.setExtra({
+          relayer: this.facilitator.relayer,
+        });
+      }
+
+      // TODO 将_verify中的内容内置到initialize中
+      const verifyResult = await this._verify();
+      if (!verifyResult.success) {
+        return {
+          success: false,
+          error: verifyResult.errors?.[0] || "Verification failed",
+        };
+      }
 
       this.initialized = true;
       return { success: true };
@@ -101,23 +133,101 @@ export class X402Server {
    * 1. 验证 client network 是否和 schema 的 network 匹配
    * 2. 验证 facilitator recipientAddress 和 schema payTo 是否一致
    */
-  async verify(): Promise<VerifyResult> {
-    if (!this.initialized) {
-      return {
-        success: false,
-        errors: [
-          "Server not initialized. Please call initialize() first.",
-        ],
-      };
-    }
+  async _verify(): Promise<VerifyResult> {
 
     const errors: string[] = [];
 
     try {
-      // 1. 验证 network 匹配
+      // 1. 检测 token 对 permit 和 eip3009 的支持
+      const schemaAsset = this.schema.get("asset");
+      if (schemaAsset) {
+        const tokenCapabilities = await detectTokenPaymentMethods(
+          schemaAsset,
+          this.client
+        );
+
+        // 如果 schema 中不存在 paymentType，则根据 tokenCapabilities 自动确定
+        // 优先级：eip3009 > permit2 > permit
+        const currentPaymentType = this.schema.get("paymentType");
+        if (!currentPaymentType) {
+          const recommendedMethod = getRecommendedPaymentMethod(tokenCapabilities);
+          if (recommendedMethod) {
+            this.schema.set("paymentType", recommendedMethod);
+            // console.log(`✅ Auto-selected payment method: ${recommendedMethod}`);
+          } else {
+            errors.push(
+              `Token ${schemaAsset} does not support any advanced payment methods (permit, eip3009, permit2). Please specify paymentType manually.`
+            );
+          }
+        } else {
+          // 验证 schema 中指定的 paymentType 是否被 token 支持
+          if (!tokenCapabilities.supportedMethods.includes(currentPaymentType)) {
+            errors.push(
+              `Token ${schemaAsset} does not support the specified payment method "${currentPaymentType}". Supported methods: ${tokenCapabilities.supportedMethods.join(", ")}`
+            );
+          }
+        }
+
+        // 如果 token 不支持任何高级支付方法，给出警告
+        if (tokenCapabilities.supportedMethods.length === 0) {
+          errors.push(
+            `Token ${schemaAsset} does not support any advanced payment methods (permit, eip3009, permit2)`
+          );
+        }
+      }
+
+      // 2. 检查 facilitator 的 /supported 是否包含此代币和链
       const clientChainId = this.client.chain?.id;
       const schemaNetwork = this.schema.get("network");
 
+      if (clientChainId && schemaAsset) {
+        const facilitatorSupported = await this.facilitator.supported({
+          chainId: clientChainId,
+          tokenAddress: schemaAsset,
+        });
+
+        // console.log(
+        //   `Checking facilitator support for chainId ${clientChainId} and token ${schemaAsset}`
+        // );
+
+        // 检查 facilitator 是否支持当前的链和代币组合
+        const isSupportedByFacilitator = facilitatorSupported.kinds.some(
+          (kind) => {
+            // 检查网络匹配
+            const networkMatches = kind.network === schemaNetwork;
+
+            // 检查资产匹配
+            const assetsInKind = (kind.extra as any)?.assets || [];
+            const assetMatches = assetsInKind.some(
+              (asset: any) =>
+                asset.address.toLowerCase() === schemaAsset.toLowerCase()
+            );
+
+            return networkMatches && assetMatches;
+          }
+        );
+
+        if (!isSupportedByFacilitator) {
+          errors.push(
+            `Facilitator does not support token ${schemaAsset} on network ${schemaNetwork} (chainId: ${clientChainId})`
+          );
+        } else {
+          // console.log(`✅ Facilitator supports this configuration`);
+        }
+
+        // 3. 检查当前配置的链是否在 /supported 中
+        const chainSupported = facilitatorSupported.kinds.some(
+          (kind) => kind.network === schemaNetwork
+        );
+
+        if (!chainSupported) {
+          errors.push(
+            `Facilitator does not support network ${schemaNetwork} (chainId: ${clientChainId})`
+          );
+        }
+      }
+
+      // 4. 验证 network 匹配
       // 简化的网络验证逻辑
       // 实际应用中可能需要更复杂的网络匹配逻辑
       if (clientChainId) {
@@ -223,7 +333,7 @@ export class X402Server {
     paymentRequirements: any,
   ): Promise<{
     success: boolean;
-    payer?: string;
+    data?: string;
     error?: string;
   }> {
     if (!this.initialized) {
@@ -242,7 +352,7 @@ export class X402Server {
 
       return {
         success: result.success,
-        payer: result.payer,
+        data: result.payer,
         error: result.error || result.errorMessage,
       };
     } catch (error) {
@@ -326,6 +436,132 @@ export class X402Server {
 
     // 如果无法匹配，返回 true（宽松验证）
     return true;
+  }
+
+  /**
+   * 解析支付 header
+   * @param paymentHeaderBase64 Base64 编码的支付 header
+   * @returns 解析结果，成功时返回 paymentPayload 和 paymentRequirements，失败时返回服务端的支付要求
+   */
+  parsePaymentHeader(
+    paymentHeaderBase64: string,
+  ):
+    | {
+      success: true;
+      data: {
+        paymentPayload: PaymentPayload;
+        paymentRequirements: PaymentRequirements;
+      };
+    }
+    | { success: false; data: PaymentRequirements; error: string } {
+    // 获取服务端的支付要求（从 schema 转换）
+    const paymentRequirements = this.schema.toJSON() as PaymentRequirements;
+
+    // 检查是否有 payment header
+    if (!paymentHeaderBase64) {
+      return {
+        success: false,
+        data: paymentRequirements,
+        error: "No X-PAYMENT header",
+      };
+    }
+
+    // 解码 payment header
+    let paymentPayload: PaymentPayload;
+    try {
+      const paymentHeaderJson = Buffer.from(
+        paymentHeaderBase64,
+        "base64",
+      ).toString("utf-8");
+      paymentPayload = JSON.parse(paymentHeaderJson) as PaymentPayload;
+    } catch (err) {
+      return {
+        success: false,
+        data: paymentRequirements,
+        error: "Invalid payment header format",
+      };
+    }
+
+    // 验证支付数据与服务端 schema 是否一致
+    const validationError = this.validatePaymentPayload(
+      paymentPayload,
+      paymentRequirements,
+    );
+    if (validationError) {
+      return {
+        success: false,
+        data: paymentRequirements,
+        error: validationError,
+      };
+    }
+
+    // 返回成功结果
+    return {
+      success: true,
+      data: {
+        paymentPayload,
+        paymentRequirements,
+      },
+    };
+  }
+
+  /**
+   * 验证客户端的支付数据是否与服务端要求一致
+   * @param paymentPayload 客户端的支付负载
+   * @param paymentRequirements 服务端的支付要求
+   * @returns 错误信息，如果验证通过则返回 null
+   */
+  private validatePaymentPayload(
+    paymentPayload: PaymentPayload,
+    paymentRequirements: PaymentRequirements,
+  ): string | null {
+    // 1. 验证 scheme
+    if (paymentPayload.scheme !== paymentRequirements.scheme) {
+      return `Scheme mismatch: expected '${paymentRequirements.scheme}', got '${paymentPayload.scheme}'`;
+    }
+
+    // 2. 验证 network
+    if (paymentPayload.network !== paymentRequirements.network) {
+      return `Network mismatch: expected '${paymentRequirements.network}', got '${paymentPayload.network}'`;
+    }
+
+    // 3. 验证支付金额（从 payload 中提取）
+    if (paymentPayload.payload) {
+      const authorization = (paymentPayload.payload as any).authorization;
+      if (authorization?.value) {
+        const paymentAmount = BigInt(authorization.value);
+        const maxAmount = BigInt(paymentRequirements.maxAmountRequired);
+
+        if (paymentAmount !== maxAmount) {
+          return `Payment amount error ${paymentAmount} !== ${maxAmount}`;
+        }
+      }
+
+      // 4. 验证 payTo 地址
+      if (authorization?.to) {
+        const expectedPayTo = paymentRequirements.payTo.toLowerCase();
+        const actualPayTo = authorization.to.toLowerCase();
+
+        if (actualPayTo !== expectedPayTo && actualPayTo !== paymentRequirements.extra?.relayer?.toLowerCase()) {
+          return `PayTo address mismatch: expected '${expectedPayTo}', got '${actualPayTo}'`;
+        }
+      }
+
+      // 5. 验证 asset 地址（如果是 permit 或 permit2）
+      const authorizationType = (paymentPayload.payload as any)
+        .authorizationType;
+      if (
+        authorizationType === "permit" ||
+        authorizationType === "permit2" ||
+        authorizationType === "eip3009"
+      ) {
+        // 对于 permit/permit2，asset 通常在 schema 中，需要与实际调用的合约匹配
+        // 这里可以添加更多验证逻辑
+      }
+    }
+
+    // 验证通过
+    return null;
   }
 }
 

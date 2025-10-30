@@ -16,7 +16,7 @@ const DEFAULT_FACILITATOR_URL = "https://facilitator.wtf.com/v1";
 /**
  * 默认 Relayer 地址
  */
-const DEFAULT_RELAYER_ADDRESS = "0xe4bb3CB99F7C9c876544d7b0DB481036Baf4aBcD";
+const DEFAULT_RELAYER_ADDRESS = "0x877D0A51a37178b5F34Ffb68a5c2beD0ff46D432";
 
 /**
  * Facilitator 类

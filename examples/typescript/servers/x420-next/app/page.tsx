@@ -257,7 +257,7 @@ export default function Home() {
             <li><strong>代币:</strong> USDC (0x03db069489e2caa4e51ed149e83d732ef3931670)</li>
             <li><strong>支付金额:</strong> 0.05 USDC</li>
             <li><strong>接收者:</strong> {process.env.NEXT_PUBLIC_RECIPIENT_ADDRESS || "未配置"}</li>
-            <li><strong>中继器:</strong> 0xe4bb3CB99F7C9c876544d7b0DB481036Baf4aBcD</li>
+            <li><strong>中继器:</strong> 0x877D0A51a37178b5F34Ffb68a5c2beD0ff46D432</li>
           </ul>
         </div>
       </main>
