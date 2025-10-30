@@ -15,12 +15,19 @@
     "format": "turbo run format",
     "lint:check": "turbo run lint:check",
     "format:check": "turbo run format:check",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "publish:all": "pnpm publish -r --access public --no-git-checks",
+    "publish:all-beta": "pnpm publish -r --access public --no-git-checks --tag beta",
+    "version:patch": "pnpm -r exec npm version patch",
+    "version:minor": "pnpm -r exec npm version minor",
+    "version:major": "pnpm -r exec npm version major",
+    "version:patch-beta": "pnpm -r exec npm version prerelease --preid=beta"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@changesets/cli": "^2.29.7",
     "tsup": "^8.4.0",
     "turbo": "^2.5.0",
     "typescript": "^5.8.3"
