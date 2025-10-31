@@ -256,7 +256,7 @@ export async function settle<transport extends Transport, chain extends Chain>(
       args: [
         paymentRequirements.asset as Address, // token
         payload.authorization.from as Address, // payer
-        payload.authorization.to as Address, // seller
+        paymentRequirements.payTo as Address, // seller
         BigInt(payload.authorization.value), // amount
         BigInt(payload.authorization.validAfter), // validAfter
         BigInt(payload.authorization.validBefore), // validBefore

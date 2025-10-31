@@ -19,11 +19,10 @@ dotenv.config({ path: envPath });
 
 // Constants
 const PORT = 4025;
-// 0x25d066c4C68C8A6332DfDB4230263608305Ca991 permit
-// 0xE3a4dB6165AfC991451D0eB86fd5149AFf84c919 pieUSD
-// 0xcea4eaef42afd4d6e12660b59018e90fa3ab28f4 3009
-const USDC_ADDRESS = "0x25d066c4C68C8A6332DfDB4230263608305Ca991" as Hex; // USDC on BSC Testnet
-const PAYMENT_AMOUNT = "50000"; // 0.05 USDC (50000 wei, assuming 6 decimals)
+// 代币地址
+const PERMIT_TOKEN_ADDRESS = "0x25d066c4C68C8A6332DfDB4230263608305Ca991" as Hex; // permit token
+const EIP3009_TOKEN_ADDRESS = "0xcea4eaef42afd4d6e12660b59018e90fa3ab28f4" as Hex; // 3009 token
+const PAYMENT_AMOUNT = "1000"; // 1 USDC (1000000000000000000 wei, assuming 18 decimals)
 const PROVIDER_URL = process.env.PROVIDER_URL || "https://data-seed-prebsc-1-s1.bnbchain.org:8545";
 const RECIPIENT_ADDRESS =
   (process.env.RECIPIENT_ADDRESS as Hex) ||
@@ -36,7 +35,7 @@ const facilitator = new Facilitator({
   recipientAddress: RECIPIENT_ADDRESS,
   // relayer: "0x...", // 可选，默认使用 recipientAddress
   waitUntil: "confirmed", // simulated | submitted | confirmed
-  baseUrl: "http://localhost:3000", // 可选
+  baseUrl: "http://49.12.148.53:3000", // 可选
   // apiKey: "your-api-key", // 可选
 });
 
@@ -45,19 +44,28 @@ console.log(`   - Recipient: ${facilitator.recipientAddress}`);
 console.log(`   - Relayer: ${facilitator.relayer}`);
 console.log(`   - Wait Until: ${facilitator.waitUntil}`);
 
-// 2. 创建 Schema (支持 Permit 和 EIP-3009)
-const schema = new X402PaymentSchema({
+// 2. 创建 Viem Client
+const client = createPublicClient({
+  chain: bscTestnet,
+  transport: http(PROVIDER_URL),
+});
+
+console.log(`\n✅ Viem Client 已创建`);
+console.log(`   - Chain: ${client.chain?.name}`);
+console.log(`   - Chain ID: ${client.chain?.id}`);
+
+// 3. 为 Permit Token 创建 Schema 和 X402Server
+const permitSchema = new X402PaymentSchema({
   scheme: "exact",
   network: "bsc-testnet",
   maxAmountRequired: PAYMENT_AMOUNT,
-  resource: `http://localhost:${PORT}/protected-resource`,
-  description: "Access to protected resource with EIP-2612 Permit or EIP-3009",
+  resource: `http://localhost:${PORT}/permit`,
+  description: "Access to protected resource with EIP-2612 Permit",
   mimeType: "application/json",
   payTo: RECIPIENT_ADDRESS,
   maxTimeoutSeconds: 3600,
-  asset: USDC_ADDRESS,
-  // paymentType: 'eip3009', // eip3009 | permit | permit2
-  // paymentType 不设置，表示支持多种类型
+  asset: PERMIT_TOKEN_ADDRESS,
+  paymentType: 'permit', // 仅支持 permit
   outputSchema: {
     input: {
       type: "http",
@@ -73,61 +81,83 @@ const schema = new X402PaymentSchema({
   },
 });
 
-console.log(`\n✅ Schema 已创建`);
-console.log(`   - Scheme: ${schema.get("scheme")}`);
-console.log(`   - Network: ${schema.get("network")}`);
-console.log(`   - Amount: ${schema.get("maxAmountRequired")}`);
-
-// 3. 创建 Viem Client
-const client = createPublicClient({
-  chain: bscTestnet,
-  transport: http(PROVIDER_URL),
-});
-
-console.log(`\n✅ Viem Client 已创建`);
-console.log(`   - Chain: ${client.chain?.name}`);
-console.log(`   - Chain ID: ${client.chain?.id}`);
-
-// 4. 创建 X402Server
-const x402Server = new X402Server({
+const permitServer = new X402Server({
   facilitator,
-  schema,
+  schema: permitSchema,
   client,
 });
 
-console.log(`\n✅ X402Server 已创建`);
+console.log(`\n✅ Permit Token X402Server 已创建`);
+console.log(`   - Token: ${PERMIT_TOKEN_ADDRESS}`);
+console.log(`   - Path: /permit`);
+
+// 4. 为 EIP-3009 Token 创建 Schema 和 X402Server
+const eip3009Schema = new X402PaymentSchema({
+  scheme: "exact",
+  network: "bsc-testnet",
+  maxAmountRequired: PAYMENT_AMOUNT,
+  resource: `http://localhost:${PORT}/3009`,
+  description: "Access to protected resource with EIP-3009",
+  mimeType: "application/json",
+  payTo: RECIPIENT_ADDRESS,
+  maxTimeoutSeconds: 3600,
+  asset: EIP3009_TOKEN_ADDRESS,
+  paymentType: 'eip3009', // 仅支持 eip3009
+  outputSchema: {
+    input: {
+      type: "http",
+      method: "POST",
+      discoverable: true,
+      bodyFields: {},
+    },
+    output: {
+      message: "string",
+      authorizationType: "string",
+      payer: "string",
+    },
+  },
+});
+
+const eip3009Server = new X402Server({
+  facilitator,
+  schema: eip3009Schema,
+  client,
+});
+
+console.log(`\n✅ EIP-3009 Token X402Server 已创建`);
+console.log(`   - Token: ${EIP3009_TOKEN_ADDRESS}`);
+console.log(`   - Path: /3009`);
 
 // 5. 初始化和验证
 (async () => {
-  // 初始化
-  const initResult = await x402Server.initialize();
-  if (!initResult.success) {
-    console.error(`\n❌ Server 初始化失败:`, initResult.error);
+  // 初始化 Permit Server
+  const permitInitResult = await permitServer.initialize();
+  if (!permitInitResult.success) {
+    console.error(`\n❌ Permit Server 初始化失败:`, permitInitResult.error);
     process.exit(1);
   }
-  console.log(`\n✅ Server 初始化成功`);
-  const extra = schema.getExtra();
-  console.log(`   - Relayer (added to schema): ${extra?.relayer}`);
+  console.log(`\n✅ Permit Server 初始化成功`);
 
-  // 验证配置
-  // const verifyResult = await x402Server.verify();
-  // if (!verifyResult.success) {
-  //   console.error(`\n⚠️  配置验证警告:`);
-  //   verifyResult.errors?.forEach((error) => {
-  //     console.error(`   - ${error}`);
-  //   });
-  // } else {
-  //   console.log(`\n✅ 配置验证通过`);
-  // }
+  // 初始化 EIP-3009 Server
+  const eip3009InitResult = await eip3009Server.initialize();
+  if (!eip3009InitResult.success) {
+    console.error(`\n❌ EIP-3009 Server 初始化失败:`, eip3009InitResult.error);
+    process.exit(1);
+  }
+  console.log(`\n✅ EIP-3009 Server 初始化成功`);
 
   console.log(`\n═══════════════════════════════════════════`);
-  console.log(`  ERC20 x402 Resource Server (New Packages)`);
+  console.log(`  ERC20 x402 Resource Server (Multi-Token)`);
   console.log(`═══════════════════════════════════════════`);
   console.log(`  Port: ${PORT}`);
-  console.log(`  Token: ${USDC_ADDRESS} (USDC)`);
-  console.log(`  Payment: ${PAYMENT_AMOUNT} wei`);
   console.log(`  Recipient: ${RECIPIENT_ADDRESS}`);
-  console.log(`  Supported: EIP-2612 Permit & EIP-3009`);
+  console.log(`  Payment Amount: ${PAYMENT_AMOUNT} wei`);
+  console.log(`\n  📍 /permit endpoint:`);
+  console.log(`     Token: ${PERMIT_TOKEN_ADDRESS}`);
+  console.log(`     Type: EIP-2612 Permit`);
+  console.log(`\n  📍 /3009 endpoint:`);
+  console.log(`     Token: ${EIP3009_TOKEN_ADDRESS}`);
+  console.log(`     Type: EIP-3009`);
   console.log(`═══════════════════════════════════════════\n`);
 })();
 
@@ -135,9 +165,14 @@ console.log(`\n✅ X402Server 已创建`);
 const app = new Hono();
 app.use("*", logger());
 
-// POST /protected-resource
-app.post("/protected-resource", async (c) => {
-  console.log("\n📥 Received POST /protected-resource");
+// 创建通用的支付处理函数
+async function handlePayment(
+  c: any,
+  x402Server: X402Server,
+  schema: X402PaymentSchema,
+  tokenName: string
+) {
+  console.log(`\n📥 Received POST request for ${tokenName}`);
   const paymentHeaderBase64 = c.req.header("X-PAYMENT");
 
   const decodePaymentResult = await x402Server.parsePaymentHeader(paymentHeaderBase64 as string);
@@ -154,7 +189,7 @@ app.post("/protected-resource", async (c) => {
 
   // 使用 X402Server 验证支付
   try {
-    console.log(`\n🔐 Verifying payment with X402Server...`);
+    console.log(`\n🔐 Verifying payment with X402Server (${tokenName})...`);
     const verifyResult = await x402Server.verifyPayment(
       paymentPayload,
       paymentRequirements,
@@ -181,7 +216,7 @@ app.post("/protected-resource", async (c) => {
 
   // 使用 X402Server 结算支付
   try {
-    console.log(`\n💸 Settling payment with X402Server...`);
+    console.log(`\n💸 Settling payment with X402Server (${tokenName})...`);
     const settleResult = await x402Server.settle(
       paymentPayload,
       paymentRequirements,
@@ -208,21 +243,40 @@ app.post("/protected-resource", async (c) => {
     console.log("\n✅ Responding 200 OK to client");
 
     return c.json({
-      message:
-        "Payment verified and settled successfully with new X402 packages!",
+      message: `Payment verified and settled successfully for ${tokenName}!`,
+      tokenName,
+      tokenAddress: schema.get("asset"),
       transactionHash: settleResult.transactionHash,
     });
   } catch (err: any) {
     console.error("❌ Error settling payment:", err.message);
     return c.json({ error: "Payment settlement failed" }, 500);
   }
+}
+
+// POST /permit - Permit Token 端点
+app.post("/permit", async (c) => {
+  return handlePayment(c, permitServer, permitSchema, "Permit Token");
 });
 
-// GET /payment-requirements - 获取支付要求
-app.get("/payment-requirements", (c) => {
+// GET /permit (支付要求)
+app.get("/permit", (c) => {
   return c.json({
     x402Version: 1,
-    accepts: [schema.toJSON()],
+    accepts: [permitSchema.toJSON()],
+  });
+});
+
+// POST /3009 - EIP-3009 Token 端点
+app.post("/3009", async (c) => {
+  return handlePayment(c, eip3009Server, eip3009Schema, "EIP-3009 Token");
+});
+
+// GET /3009 (支付要求)
+app.get("/3009", (c) => {
+  return c.json({
+    x402Version: 1,
+    accepts: [eip3009Schema.toJSON()],
   });
 });
 
