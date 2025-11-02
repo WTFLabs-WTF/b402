@@ -43,7 +43,7 @@ export interface VerifyResult {
  */
 export interface SettleResult {
   success: boolean;
-  transactionHash?: string;
+  transaction?: string;
   error?: string;
 }
 

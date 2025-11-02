@@ -48,7 +48,101 @@ const EIP2612_PERMIT = "0xd505accf" as const;
 const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const;
 
 /**
+ * EIP-1967 标准实现槽位
+ * keccak256("eip1967.proxy.implementation") - 1
+ */
+const EIP1967_IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc" as const;
+
+/**
+ * EIP-1822 UUPS 实现槽位
+ * keccak256("PROXIABLE")
+ */
+const EIP1822_IMPLEMENTATION_SLOT = "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3" as const;
+
+/**
+ * OpenZeppelin implementation() 函数签名
+ */
+const IMPLEMENTATION_FUNCTION = "0x5c60da1b" as const;
+
+/**
+ * 检测合约是否是代理合约，并获取实现合约地址
+ */
+async function getImplementationAddress(
+  client: PublicClient,
+  proxyAddress: Address
+): Promise<Address | null> {
+  try {
+    // 方法1: 尝试读取 EIP-1967 存储槽位
+    try {
+      const implSlotData = await client.getStorageAt({
+        address: proxyAddress,
+        slot: EIP1967_IMPLEMENTATION_SLOT,
+      });
+      if (implSlotData && implSlotData !== "0x0000000000000000000000000000000000000000000000000000000000000000") {
+        // 从存储槽中提取地址（最后20字节）
+        const implAddress = `0x${implSlotData.slice(-40)}` as Address;
+        if (implAddress !== "0x0000000000000000000000000000000000000000") {
+          console.log(`  📦 Detected EIP-1967 proxy, implementation: ${implAddress}`);
+          return implAddress;
+        }
+      }
+    } catch {
+      // 继续尝试其他方法
+    }
+
+    // 方法2: 尝试读取 EIP-1822 存储槽位
+    try {
+      const uupsSlotData = await client.getStorageAt({
+        address: proxyAddress,
+        slot: EIP1822_IMPLEMENTATION_SLOT,
+      });
+      if (uupsSlotData && uupsSlotData !== "0x0000000000000000000000000000000000000000000000000000000000000000") {
+        const implAddress = `0x${uupsSlotData.slice(-40)}` as Address;
+        if (implAddress !== "0x0000000000000000000000000000000000000000") {
+          console.log(`  📦 Detected EIP-1822 UUPS proxy, implementation: ${implAddress}`);
+          return implAddress;
+        }
+      }
+    } catch {
+      // 继续尝试其他方法
+    }
+
+    // 方法3: 尝试调用 implementation() 函数
+    try {
+      const implABI = [
+        {
+          inputs: [],
+          name: "implementation",
+          outputs: [{ name: "", type: "address" }],
+          stateMutability: "view",
+          type: "function",
+        },
+      ] as const;
+
+      const implAddress = await client.readContract({
+        address: proxyAddress,
+        abi: implABI,
+        functionName: "implementation",
+      }) as Address;
+
+      if (implAddress && implAddress !== "0x0000000000000000000000000000000000000000") {
+        console.log(`  📦 Detected proxy via implementation(), implementation: ${implAddress}`);
+        return implAddress;
+      }
+    } catch {
+      // 不是代理合约或不支持 implementation() 函数
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error detecting proxy implementation:", error);
+    return null;
+  }
+}
+
+/**
  * 检查合约是否支持某个方法（通过字节码检查）
+ * 支持代理合约检测
  */
 async function hasMethod(
   client: PublicClient,
@@ -61,7 +155,28 @@ async function hasMethod(
     if (!code) return false;
 
     // 检查字节码中是否包含方法选择器
-    return code.toLowerCase().includes(methodSelector.slice(2).toLowerCase());
+    const hasMethodInProxy = code.toLowerCase().includes(methodSelector.slice(2).toLowerCase());
+
+    // 如果代理合约中找到了方法，直接返回 true
+    if (hasMethodInProxy) {
+      return true;
+    }
+
+    // 如果代理合约中没有找到，尝试检测是否是代理合约
+    const implAddress = await getImplementationAddress(client, tokenAddress);
+    if (implAddress) {
+      // 获取实现合约的字节码
+      const implCode = await client.getBytecode({ address: implAddress });
+      if (implCode) {
+        const hasMethodInImpl = implCode.toLowerCase().includes(methodSelector.slice(2).toLowerCase());
+        if (hasMethodInImpl) {
+          console.log(`  ✅ Method ${methodSelector} found in implementation contract`);
+        }
+        return hasMethodInImpl;
+      }
+    }
+
+    return false;
   } catch (error) {
     console.error(`Error checking method ${methodSelector}:`, error);
     return false;
@@ -70,6 +185,7 @@ async function hasMethod(
 
 /**
  * 检查合约是否支持多个方法签名中的任意一个
+ * 支持代理合约检测
  */
 async function hasAnyMethod(
   client: PublicClient,
@@ -83,10 +199,34 @@ async function hasAnyMethod(
 
     const codeLower = code.toLowerCase();
 
-    // 检查是否包含任何一个方法选择器
-    return methodSelectors.some(selector =>
+    // 检查代理合约中是否包含任何一个方法选择器
+    const hasMethodInProxy = methodSelectors.some(selector =>
       codeLower.includes(selector.slice(2).toLowerCase())
     );
+
+    // 如果代理合约中找到了方法，直接返回 true
+    if (hasMethodInProxy) {
+      return true;
+    }
+
+    // 如果代理合约中没有找到，尝试检测是否是代理合约
+    const implAddress = await getImplementationAddress(client, tokenAddress);
+    if (implAddress) {
+      // 获取实现合约的字节码
+      const implCode = await client.getBytecode({ address: implAddress });
+      if (implCode) {
+        const implCodeLower = implCode.toLowerCase();
+        const hasMethodInImpl = methodSelectors.some(selector =>
+          implCodeLower.includes(selector.slice(2).toLowerCase())
+        );
+        if (hasMethodInImpl) {
+          console.log(`  ✅ Method(s) found in implementation contract`);
+        }
+        return hasMethodInImpl;
+      }
+    }
+
+    return false;
   } catch (error) {
     console.error(`Error checking methods ${methodSelectors.join(", ")}:`, error);
     return false;
@@ -187,6 +327,7 @@ export function getRecommendedPaymentMethod(
 
 /**
  * 获取 token 的 name 和 version 信息（用于 EIP-712 签名）
+ * 支持代理合约（会自动从代理合约读取，因为代理合约会 delegatecall 到实现合约）
  * @param tokenAddress 代币地址
  * @param client viem PublicClient
  * @returns Token 的 name 和 version
@@ -239,7 +380,13 @@ export async function getTokenInfo(
   ] as const;
 
   try {
-    // 获取 token name
+    // 检测是否为代理合约
+    const implAddress = await getImplementationAddress(client, address);
+    if (implAddress) {
+      console.log(`  📦 Reading token info from proxy, actual calls will be delegated to implementation`);
+    }
+
+    // 获取 token name (对于代理合约，delegatecall 会自动转发到实现合约)
     const name = await client.readContract({
       address,
       abi: erc20ABI,

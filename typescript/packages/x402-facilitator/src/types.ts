@@ -77,7 +77,7 @@ export interface VerifyResponse {
  */
 export interface SettleResponse {
   success: boolean;
-  transactionHash?: string;
+  transaction?: string;
   network?: string;
   error?: string;
   errorMessage?: string;

@@ -184,7 +184,7 @@ export class Facilitator {
 
       const data = (await response.json()) as {
         success?: boolean;
-        transactionHash?: string;
+        transaction?: string;
         network?: string;
         receipt?: any;
         error?: string;
@@ -192,7 +192,7 @@ export class Facilitator {
       };
       return {
         success: data.success ?? true,
-        transactionHash: data.transactionHash,
+        transaction: data.transaction,
         network: data.network,
         receipt: data.receipt,
         error: data.error,

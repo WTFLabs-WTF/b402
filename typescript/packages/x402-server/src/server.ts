@@ -310,7 +310,7 @@ export class X402Server {
 
       return {
         success: true,
-        transactionHash: result.transactionHash,
+        transaction: result.transaction,
       };
     } catch (error) {
       return {

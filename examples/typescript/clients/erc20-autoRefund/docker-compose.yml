@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  x402-refund-server:
+    build:
+      context: ../../../..
+      dockerfile: examples/typescript/clients/erc20-autoRefund/Dockerfile
+    container_name: x402-refund-server
+    restart: unless-stopped
+    ports:
+      - "4025:4025"
+    environment:
+      - NODE_ENV=production
+      - PROVIDER_URL=${PROVIDER_URL:-https://rpc-bsc.48.club}
+      - RECIPIENT_ADDRESS=${RECIPIENT_ADDRESS}
+      - RECIPIENT_ADDRESS_PRIVATE_KEY=${RECIPIENT_ADDRESS_PRIVATE_KEY}
+      - RELAYER_ADDRESS=${RELAYER_ADDRESS}
+      - FACILITATOR_URL=${FACILITATOR_URL:-http://127.0.0.1:3000}
+      - FACILITATOR_API_KEY=${FACILITATOR_API_KEY}
+    volumes:
+      # 映射数据库文件到本地
+      - ./data:/app/examples/typescript/clients/erc20-autoRefund/data
+      # 映射 .env 文件（如果需要）
+      - ./.env:/app/examples/typescript/clients/erc20-autoRefund/.env:ro
+    networks:
+      - x402-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4025/payments"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  x402-network:
+    driver: bridge
+
+volumes:
+  x402-data:
+    driver: local
+

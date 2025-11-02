@@ -1,11 +1,13 @@
 packages:
-  - "facilitator"
-  - "servers/*"
-  - "clients/*"
-  - "fullstack/*"
-  - "dynamic_agent"
-  - "agent"
-  - "mcp-embedded-wallet"
-  - "mpc"
-  - "discovery"
-  - "../../typescript/packages/*"
+  - facilitator
+  - servers/*
+  - clients/*
+  - fullstack/*
+  - dynamic_agent
+  - agent
+  - mcp-embedded-wallet
+  - mpc
+  - discovery
+  - ../../typescript/packages/*
+onlyBuiltDependencies:
+  - better-sqlite3
