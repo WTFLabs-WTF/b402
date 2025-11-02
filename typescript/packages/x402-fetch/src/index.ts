@@ -92,7 +92,13 @@ export function wrapFetchWithPayment(
     }
 
     // 获取支付类型，默认为 eip3009
-    const paymentType = selectedPaymentRequirements.paymentType || "eip3009";
+    const paymentType =
+      selectedPaymentRequirements.paymentType ||
+      (await exact.evm.getRecommendedPaymentMethod(
+        selectedPaymentRequirements.asset,
+        walletClient as typeof evm.EvmSigner,
+      )) ||
+      "eip3009";
 
     // 根据支付类型创建支付头
     let paymentHeader: string;
@@ -164,7 +170,7 @@ export {
   type ConnectedClient,
   type MultiNetworkSigner,
   type X402Config,
-  type EvmChainConfig
+  type EvmChainConfig,
 } from "@wtflabs/x402/types";
 export { type PaymentRequirementsSelector } from "@wtflabs/x402/client";
 export type { Hex, Chain } from "viem";

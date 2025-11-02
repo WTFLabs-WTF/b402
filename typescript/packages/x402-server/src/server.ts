@@ -69,19 +69,16 @@ export class X402Server {
     this.facilitator = config.facilitator;
     this.schema = config.schema;
     this.client = config.client;
+
+    this._initialize();
   }
 
-  /**
-   * 初始化服务器
-   * 初始化和校验 schema 等数据，对 schema 增加 facilitator 数据 extra: {relayer}
-   * 并获取 token 的 name 和 version 信息
-   */
-  async initialize(): Promise<InitializeResult> {
+  async _initialize(): Promise<InitializeResult> {
     try {
-      // 验证 schema
+      // verify the schema
       this.schema.verify();
 
-      // 获取 token 信息（name 和 version）并添加到 schema extra 中
+      // get token info (name and version) and add to schema extra
       const schemaAsset = this.schema.get("asset");
       if (schemaAsset) {
         try {
@@ -328,7 +325,7 @@ export class X402Server {
    * @param paymentPayload 支付负载
    * @param paymentRequirements 支付要求
    */
-  async verifyPayment(
+  async verify(
     paymentPayload: any,
     paymentRequirements: any,
   ): Promise<{
