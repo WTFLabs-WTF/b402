@@ -27,33 +27,139 @@ export interface TokenPaymentCapabilities {
 }
 
 /**
- * EIP-3009 方法签名
+ * EIP-3009 method signatures
  * - transferWithAuthorization(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)
  *
- * 支持多个方法签名变体，以兼容不同的实现：
- * - 0xe3ee160e: 标准 EIP-3009 实现
- * - 0xcf092995: 某些代币的替代实现
+ * Supports multiple method signature variants to accommodate different implementations:
+ * - 0xe3ee160e: Standard EIP-3009 implementation
+ * - 0xcf092995: Alternative implementation for some tokens
  */
 const EIP3009_SIGNATURES = ["0xe3ee160e", "0xcf092995"] as const;
 
 /**
- * EIP-2612 Permit 方法签名
+ * EIP-2612 Permit method signatures
  * - permit(address,address,uint256,uint256,uint8,bytes32,bytes32)
  */
 const EIP2612_PERMIT = "0xd505accf" as const;
 
 /**
- * Uniswap Permit2 合约地址（所有链相同）
+ * Uniswap Permit2 contract address (same for all chains)
  */
 const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const;
 
 /**
- * check if the token supports a specific method
+ * EIP-1967 standard implementation slot
+ * keccak256("eip1967.proxy.implementation") - 1
+ */
+const EIP1967_IMPLEMENTATION_SLOT =
+  "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc" as const;
+
+/**
+ * EIP-1822 UUPS implementation slot
+ * keccak256("PROXIABLE")
+ */
+const EIP1822_IMPLEMENTATION_SLOT =
+  "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3" as const;
+
+/**
+ * OpenZeppelin implementation() function signature
+ */
+// const IMPLEMENTATION_FUNCTION = "0x5c60da1b" as const;
+
+/**
+ * Detect if the contract is a proxy contract and get the implementation contract address
  *
  * @param client - viem PublicClient
- * @param tokenAddress - token address
+ * @param proxyAddress - contract address
+ * @returns implementation contract address or null
+ */
+async function getImplementationAddress(
+  client: PublicClient,
+  proxyAddress: Address,
+): Promise<Address | null> {
+  try {
+    // Method 1: Try reading the EIP-1967 storage slot
+    try {
+      const implSlotData = await client.getStorageAt({
+        address: proxyAddress,
+        slot: EIP1967_IMPLEMENTATION_SLOT,
+      });
+      if (
+        implSlotData &&
+        implSlotData !== "0x0000000000000000000000000000000000000000000000000000000000000000"
+      ) {
+        // Extract the address from the storage slot (last 20 bytes)
+        const implAddress = `0x${implSlotData.slice(-40)}` as Address;
+        if (implAddress !== "0x0000000000000000000000000000000000000000") {
+          console.log(`  📦 Detected EIP-1967 proxy, implementation: ${implAddress}`);
+          return implAddress;
+        }
+      }
+    } catch {
+      // Continue trying other methods
+    }
+
+    // Method 2: Try reading the EIP-1822 storage slot
+    try {
+      const uupsSlotData = await client.getStorageAt({
+        address: proxyAddress,
+        slot: EIP1822_IMPLEMENTATION_SLOT,
+      });
+      if (
+        uupsSlotData &&
+        uupsSlotData !== "0x0000000000000000000000000000000000000000000000000000000000000000"
+      ) {
+        const implAddress = `0x${uupsSlotData.slice(-40)}` as Address;
+        if (implAddress !== "0x0000000000000000000000000000000000000000") {
+          console.log(`  📦 Detected EIP-1822 UUPS proxy, implementation: ${implAddress}`);
+          return implAddress;
+        }
+      }
+    } catch {
+      // Continue trying other methods
+    }
+
+    // Method 3: Try calling the implementation() function
+    try {
+      const implABI = [
+        {
+          inputs: [],
+          name: "implementation",
+          outputs: [{ name: "", type: "address" }],
+          stateMutability: "view",
+          type: "function",
+        },
+      ] as const;
+
+      const implAddress = (await client.readContract({
+        address: proxyAddress,
+        abi: implABI,
+        functionName: "implementation",
+      })) as Address;
+
+      if (implAddress && implAddress !== "0x0000000000000000000000000000000000000000") {
+        console.log(`  📦 Detected proxy via implementation(), implementation: ${implAddress}`);
+        return implAddress;
+      }
+    } catch {
+      // Not a proxy contract or does not support implementation() function
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error detecting proxy implementation:", error);
+    return null;
+  }
+}
+
+/**
+ * Check if the contract supports a particular method (by checking the bytecode)
+ * Supports proxy contract detection
+ *
+ * @param client - viem PublicClient
+ * @param tokenAddress - contract address
  * @param methodSelector - method selector
- * @returns true if the method is supported, false otherwise
+ * @returns true if the contract supports the method, false otherwise
  */
 async function hasMethod(
   client: PublicClient,
@@ -61,12 +167,35 @@ async function hasMethod(
   methodSelector: string,
 ): Promise<boolean> {
   try {
-    // 尝试获取合约代码
+    // Try getting the contract code
     const code = await client.getBytecode({ address: tokenAddress });
     if (!code) return false;
 
-    // 检查字节码中是否包含方法选择器
-    return code.toLowerCase().includes(methodSelector.slice(2).toLowerCase());
+    // Check if the bytecode contains the method selector
+    const hasMethodInProxy = code.toLowerCase().includes(methodSelector.slice(2).toLowerCase());
+
+    // If the proxy contract contains the method, return true
+    if (hasMethodInProxy) {
+      return true;
+    }
+
+    // If the proxy contract does not contain the method, try detecting if it is a proxy contract
+    const implAddress = await getImplementationAddress(client, tokenAddress);
+    if (implAddress) {
+      // Get the implementation contract bytecode
+      const implCode = await client.getBytecode({ address: implAddress });
+      if (implCode) {
+        const hasMethodInImpl = implCode
+          .toLowerCase()
+          .includes(methodSelector.slice(2).toLowerCase());
+        if (hasMethodInImpl) {
+          console.log(`  ✅ Method ${methodSelector} found in implementation contract`);
+        }
+        return hasMethodInImpl;
+      }
+    }
+
+    return false;
   } catch (error) {
     console.error(`Error checking method ${methodSelector}:`, error);
     return false;
@@ -74,12 +203,14 @@ async function hasMethod(
 }
 
 /**
- * check if the token supports any of the given method selectors
+ * Check if the contract supports any of the method signatures
+ * Supports proxy contract detection
  *
  * @param client - viem PublicClient
- * @param tokenAddress - token address
+ * @param tokenAddress - contract address
  * @param methodSelectors - method selectors
- * @returns true if the token supports any of the given method selectors, false otherwise
+ * @returns true if the contract supports any of the method signatures, false otherwise
+ * Supports proxy contract detection
  */
 async function hasAnyMethod(
   client: PublicClient,
@@ -87,14 +218,40 @@ async function hasAnyMethod(
   methodSelectors: readonly string[],
 ): Promise<boolean> {
   try {
-    // 尝试获取合约代码
+    // Try getting the contract code
     const code = await client.getBytecode({ address: tokenAddress });
     if (!code) return false;
 
     const codeLower = code.toLowerCase();
 
-    // 检查是否包含任何一个方法选择器
-    return methodSelectors.some(selector => codeLower.includes(selector.slice(2).toLowerCase()));
+    // Check if the proxy contract contains any of the method selectors
+    const hasMethodInProxy = methodSelectors.some(selector =>
+      codeLower.includes(selector.slice(2).toLowerCase()),
+    );
+
+    // If the proxy contract contains the method, return true
+    if (hasMethodInProxy) {
+      return true;
+    }
+
+    // If the proxy contract does not contain the method, try detecting if it is a proxy contract
+    const implAddress = await getImplementationAddress(client, tokenAddress);
+    if (implAddress) {
+      // Get the implementation contract bytecode
+      const implCode = await client.getBytecode({ address: implAddress });
+      if (implCode) {
+        const implCodeLower = implCode.toLowerCase();
+        const hasMethodInImpl = methodSelectors.some(selector =>
+          implCodeLower.includes(selector.slice(2).toLowerCase()),
+        );
+        if (hasMethodInImpl) {
+          console.log(`  ✅ Method(s) found in implementation contract`);
+        }
+        return hasMethodInImpl;
+      }
+    }
+
+    return false;
   } catch (error) {
     console.error(`Error checking methods ${methodSelectors.join(", ")}:`, error);
     return false;
@@ -102,18 +259,18 @@ async function hasAnyMethod(
 }
 
 /**
- * check if the Permit2 contract is deployed on the chain
+ * Check if the Permit2 contract is deployed on the chain
  *
  * @param client - viem PublicClient
  * @returns true if the Permit2 contract is deployed on the chain, false otherwise
  */
 async function checkPermit2Support(client: PublicClient): Promise<boolean> {
   try {
-    // 检查 Permit2 合约是否在该链上部署
+    // Check if the Permit2 contract is deployed on the chain
     const permit2Code = await client.getBytecode({ address: PERMIT2_ADDRESS });
     if (!permit2Code) return false;
 
-    // 如果 Permit2 存在，理论上任何 ERC-20 都可以使用它
+    // If the Permit2 contract exists,理论上任何 ERC-20 都可以使用它
     return true;
   } catch (error) {
     console.error("Error checking Permit2 support:", error);
@@ -122,11 +279,11 @@ async function checkPermit2Support(client: PublicClient): Promise<boolean> {
 }
 
 /**
- * detect the payment methods supported by the token
+ * Detect the payment methods supported by the token
  *
  * @param tokenAddress - token address
  * @param client - viem PublicClient
- * @returns the payment capabilities of the token
+ * @returns detection result
  */
 export async function detectTokenPaymentMethods(
   tokenAddress: string,
@@ -136,14 +293,14 @@ export async function detectTokenPaymentMethods(
 
   console.log(`🔍 Detecting payment methods for token ${address}...`);
 
-  // 并行检测所有方法
+  // Detect all methods in parallel
   const [hasEIP3009, hasPermit, hasPermit2Approval] = await Promise.all([
     hasAnyMethod(client, address, EIP3009_SIGNATURES),
     hasMethod(client, address, EIP2612_PERMIT),
     checkPermit2Support(client),
   ]);
 
-  // 构建支持的方法列表
+  // Build the list of supported methods
   const supportedMethods: PaymentMethod[] = [];
 
   if (hasEIP3009) {
@@ -178,22 +335,24 @@ export async function detectTokenPaymentMethods(
 }
 
 /**
- * get the recommended payment method for the token
+ * Get the recommended payment method (only return types supported by the schema)
+ * Sort by priority: eip3009 > permit > permit2
+ * Note: permit2-witness is mapped to permit2 because they are the same payment type in the schema
  *
  * @param tokenAddress - token address
  * @param client - viem PublicClient
- * @returns the recommended payment method
+ * @returns recommended payment method
  */
 export async function getRecommendedPaymentMethod(
   tokenAddress: string,
   client: PublicClient,
-): Promise<"eip3009" | "permit" | "permit2" | null> {
+): Promise<"eip3009" | "permit2" | "permit" | null> {
   const capabilities = await detectTokenPaymentMethods(tokenAddress, client);
   const { supportedMethods } = capabilities;
 
   if (supportedMethods.includes("eip3009")) return "eip3009";
   if (supportedMethods.includes("permit")) return "permit";
-  // permit2 和 permit2-witness 都映射为 permit2（schema 只支持 permit2）
+  // permit2 and permit2-witness are mapped to permit2 (schema only supports permit2)
   if (supportedMethods.includes("permit2") || supportedMethods.includes("permit2-witness")) {
     return "permit2";
   }
@@ -202,16 +361,17 @@ export async function getRecommendedPaymentMethod(
 }
 
 /**
- * get the name and version information of the token (for EIP-712 signing)
+ * Get the name and version information of the token (for EIP-712 signing)
+ * Supports proxy contracts (will automatically read from the proxy contract, because the proxy contract will delegatecall to the implementation contract)
  *
  * @param tokenAddress - token address
  * @param client - viem PublicClient
- * @returns the name and version information of the token
+ * @returns name and version information of the token
  */
 export async function getTokenInfo(tokenAddress: string, client: PublicClient): Promise<TokenInfo> {
   const address = tokenAddress.toLowerCase() as Address;
 
-  // ERC-20 标准 ABI
+  // ERC-20 standard ABI
   const erc20ABI = [
     {
       inputs: [],
@@ -222,7 +382,7 @@ export async function getTokenInfo(tokenAddress: string, client: PublicClient): 
     },
   ] as const;
 
-  // EIP-5267 eip712Domain ABI（OpenZeppelin v5+）
+  // EIP-5267 eip712Domain ABI (OpenZeppelin v5+)
   const eip712DomainABI = [
     {
       inputs: [],
@@ -241,7 +401,7 @@ export async function getTokenInfo(tokenAddress: string, client: PublicClient): 
     },
   ] as const;
 
-  // version() ABI（OpenZeppelin v4）
+  // version() ABI (OpenZeppelin v4)
   const versionABI = [
     {
       inputs: [],
@@ -253,14 +413,22 @@ export async function getTokenInfo(tokenAddress: string, client: PublicClient): 
   ] as const;
 
   try {
-    // 获取 token name
+    // Detect if the contract is a proxy contract
+    const implAddress = await getImplementationAddress(client, address);
+    if (implAddress) {
+      console.log(
+        `  📦 Reading token info from proxy, actual calls will be delegated to implementation`,
+      );
+    }
+
+    // Get the token name (for proxy contracts, delegatecall will automatically forward to the implementation contract)
     const name = await client.readContract({
       address,
       abi: erc20ABI,
       functionName: "name",
     });
 
-    // 尝试获取 version，优先使用 EIP-5267
+    // Try getting the version, prioritize using EIP-5267
     let version = "1"; // 默认版本
     try {
       const result = await client.readContract({
@@ -268,10 +436,10 @@ export async function getTokenInfo(tokenAddress: string, client: PublicClient): 
         abi: eip712DomainABI,
         functionName: "eip712Domain",
       });
-      // eip712Domain 返回 [fields, name, version, chainId, verifyingContract, salt, extensions]
-      version = result[2] as string; // version 是第 3 个元素（索引 2）
+      // eip712Domain returns [fields, name, version, chainId, verifyingContract, salt, extensions]
+      version = result[2] as string; // version is the 3rd element (index 2)
     } catch {
-      // 回退到 version() 函数（OpenZeppelin v4）
+      // Fallback to version() function (OpenZeppelin v4)
       try {
         version = await client.readContract({
           address,
@@ -279,7 +447,7 @@ export async function getTokenInfo(tokenAddress: string, client: PublicClient): 
           functionName: "version",
         });
       } catch {
-        // 如果两种方法都不可用，使用默认值 "1"
+        // If both methods are not available, use default value "1"
         console.log(`  ℹ️  Using default version "1" for token ${address}`);
       }
     }
