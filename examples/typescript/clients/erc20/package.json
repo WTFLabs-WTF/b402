@@ -17,7 +17,8 @@
     "@wtflabs/x402-schema": "workspace:*",
     "@wtflabs/x402-facilitator": "workspace:*",
     "@wtflabs/x402-server": "workspace:*",
-    "@wtflabs/x402-fetch": "workspace:*"
+    "@wtflabs/x402-fetch": "workspace:*",
+    "@wtflabs/x402": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.3",

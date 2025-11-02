@@ -17,6 +17,11 @@ import {
 import { exact } from "@wtflabs/x402/schemes";
 
 /**
+ * Header name for specifying payment type
+ */
+export const PAYMENT_TYPE_HEADER = "x-payment-type" as const;
+
+/**
  * Enables the payment of APIs using the x402 payment protocol.
  *
  * This function wraps the native fetch API to automatically handle 402 Payment Required responses
@@ -91,9 +96,13 @@ export function wrapFetchWithPayment(
       throw new Error("Payment amount exceeds maximum allowed");
     }
 
-    // 获取支付类型，默认为 eip3009
+    // 从响应 header 中获取支付类型
+    const headerPaymentType = response.headers.get(PAYMENT_TYPE_HEADER);
+
+    // 获取支付类型，优先级：header > paymentRequirements > 自动检测 > 默认
     const paymentType =
       selectedPaymentRequirements.paymentType ||
+      headerPaymentType ||
       (await exact.evm.getRecommendedPaymentMethod(
         selectedPaymentRequirements.asset,
         walletClient as typeof evm.EvmSigner,

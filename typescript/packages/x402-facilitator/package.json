@@ -1,6 +1,6 @@
 {
   "name": "@wtflabs/x402-facilitator",
-  "version": "0.0.1-beta.5",
+  "version": "0.0.1-beta.7",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

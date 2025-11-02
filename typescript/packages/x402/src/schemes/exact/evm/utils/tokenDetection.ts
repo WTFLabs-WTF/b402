@@ -9,6 +9,34 @@ export interface TokenInfo {
 }
 
 /**
+ * 缓存存储
+ */
+const paymentMethodsCache = new Map<string, TokenPaymentCapabilities>();
+const recommendedMethodCache = new Map<string, "eip3009" | "permit2" | "permit" | null>();
+
+const PRESET_TOKEN_CAPABILITIES: Record<
+  string,
+  {
+    supportedMethods: PaymentMethod[];
+    supportedNetworks: number[];
+    description?: string; // 代币描述（可选）
+  }
+> = {
+  // World Liberty Financial USD - 只支持 permit
+  "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d": {
+    supportedMethods: ["permit"],
+    supportedNetworks: [56],
+    description: "World Liberty Financial USD (WLFI)",
+  },
+  // 可以继续添加更多预设代币
+  // 示例：
+  // "0x其他代币地址": {
+  //   supportedMethods: ["eip3009", "permit"],
+  //   description: "代币名称",
+  // },
+};
+
+/**
  * 支持的支付方式
  */
 export type PaymentMethod = "eip3009" | "permit" | "permit2" | "permit2-witness";
@@ -290,6 +318,57 @@ export async function detectTokenPaymentMethods(
   client: PublicClient,
 ): Promise<TokenPaymentCapabilities> {
   const address = tokenAddress.toLowerCase() as Address;
+  const chainId = await client.getChainId();
+  const cacheKey = `${chainId}:${address}`;
+
+  // 检查缓存
+  const cached = paymentMethodsCache.get(cacheKey);
+  if (cached) {
+    console.log(`💾 Using cached payment methods for token ${address}`);
+    return cached;
+  }
+
+  const presetCapabilities = PRESET_TOKEN_CAPABILITIES[address];
+  if (presetCapabilities) {
+    if (!chainId || !presetCapabilities.supportedNetworks.includes(chainId)) {
+      return {
+        address,
+        supportedMethods: [],
+        details: {
+          hasEIP3009: false,
+          hasPermit: false,
+          hasPermit2Approval: false,
+        },
+      };
+    }
+
+    // 从预设的方法列表构建 details
+    const hasEIP3009 = presetCapabilities.supportedMethods.includes("eip3009");
+    const hasPermit = presetCapabilities.supportedMethods.includes("permit");
+    const hasPermit2Approval =
+      presetCapabilities.supportedMethods.includes("permit2") ||
+      presetCapabilities.supportedMethods.includes("permit2-witness");
+
+    if (hasEIP3009) {
+      console.log("  ✅ EIP-3009 (transferWithAuthorization) - from preset");
+    }
+    if (hasPermit) {
+      console.log("  ✅ EIP-2612 (permit) - from preset");
+    }
+    if (hasPermit2Approval) {
+      console.log("  ✅ Permit2 support - from preset");
+    }
+
+    return {
+      address,
+      supportedMethods: presetCapabilities.supportedMethods,
+      details: {
+        hasEIP3009,
+        hasPermit,
+        hasPermit2Approval,
+      },
+    };
+  }
 
   console.log(`🔍 Detecting payment methods for token ${address}...`);
 
@@ -323,7 +402,7 @@ export async function detectTokenPaymentMethods(
     console.log("  ⚠️  No advanced payment methods detected (standard ERC-20 only)");
   }
 
-  return {
+  const result = {
     address,
     supportedMethods,
     details: {
@@ -332,6 +411,11 @@ export async function detectTokenPaymentMethods(
       hasPermit2Approval,
     },
   };
+
+  // 存入缓存
+  paymentMethodsCache.set(cacheKey, result);
+
+  return result;
 }
 
 /**
@@ -347,17 +431,35 @@ export async function getRecommendedPaymentMethod(
   tokenAddress: string,
   client: PublicClient,
 ): Promise<"eip3009" | "permit2" | "permit" | null> {
+  const address = tokenAddress.toLowerCase() as Address;
+  const chainId = await client.getChainId();
+  const cacheKey = `${chainId}:${address}`;
+
+  // 检查缓存
+  const cached = recommendedMethodCache.get(cacheKey);
+  if (cached !== undefined) {
+    console.log(`💾 Using cached recommended method for token ${address}`);
+    return cached;
+  }
+
   const capabilities = await detectTokenPaymentMethods(tokenAddress, client);
   const { supportedMethods } = capabilities;
 
-  if (supportedMethods.includes("eip3009")) return "eip3009";
-  if (supportedMethods.includes("permit")) return "permit";
-  // permit2 and permit2-witness are mapped to permit2 (schema only supports permit2)
-  if (supportedMethods.includes("permit2") || supportedMethods.includes("permit2-witness")) {
-    return "permit2";
+  let result: "eip3009" | "permit2" | "permit" | null = null;
+
+  if (supportedMethods.includes("eip3009")) {
+    result = "eip3009";
+  } else if (supportedMethods.includes("permit")) {
+    result = "permit";
+  } else if (supportedMethods.includes("permit2") || supportedMethods.includes("permit2-witness")) {
+    // permit2 and permit2-witness are mapped to permit2 (schema only supports permit2)
+    result = "permit2";
   }
 
-  return null;
+  // 存入缓存
+  recommendedMethodCache.set(cacheKey, result);
+
+  return result;
 }
 
 /**
