@@ -1,49 +1,43 @@
-import type { Facilitator } from "@wtflabs/x402-facilitator";
-import type { X402PaymentSchema } from "@wtflabs/x402-schema";
 import type { PublicClient } from "viem";
+import type { Facilitator } from "@wtflabs/x402-facilitator";
 
 /**
  * X402Server 配置选项
  */
 export interface X402ServerConfig {
-  /**
-   * Facilitator 实例
-   */
+  /** Viem PublicClient (必填) */
+  client: PublicClient;
+
+  /** Facilitator 实例 (必填) */
   facilitator: Facilitator;
 
-  /**
-   * Payment Schema 实例
-   */
-  schema: X402PaymentSchema;
-
-  /**
-   * Viem Public Client 实例
-   */
-  client: PublicClient;
+  /** 网络名称，默认从 client 自动检测 */
+  network?: string;
 }
 
-/**
- * 初始化结果
- */
-export interface InitializeResult {
-  success: boolean;
-  error?: string;
-}
+// Re-export all types and schemas from schemas.ts
+export type {
+  CreateRequirementsConfig,
+  PaymentRequirements,
+  PaymentPayload,
+  Response402,
+  InitResult,
+  ProcessResult,
+  ParseResult,
+  VerifyResult,
+  SettleResult,
+  ParsedPayment,
+} from "./schemas";
 
-/**
- * 验证结果
- */
-export interface VerifyResult {
-  success: boolean;
-  errors?: string[];
-}
-
-/**
- * 结算结果
- */
-export interface SettleResult {
-  success: boolean;
-  transaction?: string;
-  error?: string;
-}
-
+export {
+  CreateRequirementsConfigSchema,
+  PaymentRequirementsSchema,
+  PaymentPayloadSchema,
+  Response402Schema,
+  InitResultSchema,
+  ProcessResultSchema,
+  ParseResultSchema,
+  VerifyResultSchema,
+  SettleResultSchema,
+  ParsedPaymentSchema,
+} from "./schemas";

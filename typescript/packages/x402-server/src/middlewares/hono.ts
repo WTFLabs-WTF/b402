@@ -1,0 +1,138 @@
+/**
+ * Hono 中间件 for x402 Payment Protocol
+ */
+
+import type { X402Server } from "../server";
+import type { CreateRequirementsConfig } from "../schemas";
+
+/**
+ * Hono types (避免直接导入 hono，因为它是可选依赖)
+ */
+type Context = any;
+type MiddlewareHandler = any;
+
+/**
+ * Hono 中间件配置选项
+ */
+export interface HonoMiddlewareOptions {
+  /** X402Server 实例 */
+  server: X402Server;
+
+  /** 获取 token 地址的函数 */
+  getToken: (c: Context) => string | Promise<string>;
+
+  /** 获取金额的函数 */
+  getAmount: (c: Context) => string | Promise<string>;
+
+  /** 可选：获取额外配置的函数 */
+  getConfig?: (c: Context) => Partial<CreateRequirementsConfig> | Promise<Partial<CreateRequirementsConfig>>;
+
+  /** 可选：自定义错误处理 */
+  onError?: (error: Error, c: Context) => Response | Promise<Response>;
+
+  /** 可选：自定义 402 响应处理 */
+  on402?: (c: Context, response402: any) => Response | Promise<Response>;
+
+  /** 可选：支付成功后的回调 */
+  onPaymentSuccess?: (c: Context, payer: string, txHash: string) => void | Promise<void>;
+}
+
+/**
+ * 创建 Hono 中间件
+ *
+ * @param options - 中间件配置
+ * @returns Hono 中间件函数
+ *
+ * @example
+ * ```typescript
+ * const middleware = createHonoMiddleware({
+ *   server,
+ *   getToken: (c) => c.req.query("token") || USDC,
+ *   getAmount: async (c) => {
+ *     const body = await c.req.json();
+ *     return calculatePrice(body.complexity);
+ *   },
+ * });
+ *
+ * app.post("/api/resource", middleware, (c) => {
+ *   // Payment already verified and settled
+ *   const { payer, txHash } = c.get("x402");
+ *   return c.json({ data: "resource", payer, txHash });
+ * });
+ * ```
+ */
+export function createHonoMiddleware(options: HonoMiddlewareOptions): MiddlewareHandler {
+  return async (c: Context, next: any) => {
+    try {
+      // 1. 获取 token 和 amount
+      const token = await options.getToken(c);
+      const amount = await options.getAmount(c);
+
+      // 2. 获取额外配置
+      const extraConfig = options.getConfig ? await options.getConfig(c) : {};
+
+      // 3. 创建支付要求
+      const requirements = await options.server.createRequirements({
+        token,
+        amount,
+        ...extraConfig,
+      });
+
+      // 4. 处理支付
+      const paymentHeader = c.req.header("x-payment");
+      const result = await options.server.process(paymentHeader, requirements);
+
+      // 5. 处理结果
+      if (!result.success) {
+        // 支付失败，返回 402
+        if (options.on402) {
+          return options.on402(c, result.response);
+        } else {
+          return c.json(result.response, 402);
+        }
+      }
+
+      // 6. 支付成功
+      // 将支付信息存储到 context
+      c.set("x402", {
+        payer: result.data.payer,
+        txHash: result.data.txHash,
+      });
+
+      // 调用成功回调
+      if (options.onPaymentSuccess) {
+        await options.onPaymentSuccess(c, result.data.payer, result.data.txHash);
+      }
+
+      // 继续到下一个中间件
+      await next();
+    } catch (error) {
+      // 错误处理
+      if (options.onError) {
+        return options.onError(error as Error, c);
+      } else {
+        console.error("x402 middleware error:", error);
+        return c.json(
+          {
+            error: "Payment processing error",
+            message: error instanceof Error ? error.message : "Unknown error",
+          },
+          500,
+        );
+      }
+    }
+  };
+}
+
+/**
+ * 扩展 Hono Context 类型
+ * 注意：这个扩展只在安装了 hono 时生效
+ */
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+interface HonoContextVariableMap {
+  x402?: {
+    payer: string;
+    txHash: string;
+  };
+}
+

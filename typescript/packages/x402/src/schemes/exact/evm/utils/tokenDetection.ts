@@ -196,7 +196,7 @@ async function hasMethod(
 ): Promise<boolean> {
   try {
     // Try getting the contract code
-    const code = await client.getBytecode({ address: tokenAddress });
+    const code = await client.getCode({ address: tokenAddress });
     if (!code) return false;
 
     // Check if the bytecode contains the method selector
@@ -211,7 +211,7 @@ async function hasMethod(
     const implAddress = await getImplementationAddress(client, tokenAddress);
     if (implAddress) {
       // Get the implementation contract bytecode
-      const implCode = await client.getBytecode({ address: implAddress });
+      const implCode = await client.getCode({ address: implAddress });
       if (implCode) {
         const hasMethodInImpl = implCode
           .toLowerCase()
@@ -247,7 +247,7 @@ async function hasAnyMethod(
 ): Promise<boolean> {
   try {
     // Try getting the contract code
-    const code = await client.getBytecode({ address: tokenAddress });
+    const code = await client.getCode({ address: tokenAddress });
     if (!code) return false;
 
     const codeLower = code.toLowerCase();
@@ -266,7 +266,7 @@ async function hasAnyMethod(
     const implAddress = await getImplementationAddress(client, tokenAddress);
     if (implAddress) {
       // Get the implementation contract bytecode
-      const implCode = await client.getBytecode({ address: implAddress });
+      const implCode = await client.getCode({ address: implAddress });
       if (implCode) {
         const implCodeLower = implCode.toLowerCase();
         const hasMethodInImpl = methodSelectors.some(selector =>
@@ -295,7 +295,7 @@ async function hasAnyMethod(
 async function checkPermit2Support(client: PublicClient): Promise<boolean> {
   try {
     // Check if the Permit2 contract is deployed on the chain
-    const permit2Code = await client.getBytecode({ address: PERMIT2_ADDRESS });
+    const permit2Code = await client.getCode({ address: PERMIT2_ADDRESS });
     if (!permit2Code) return false;
 
     // If the Permit2 contract exists,理论上任何 ERC-20 都可以使用它
