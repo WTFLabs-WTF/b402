@@ -31,8 +31,6 @@ export type {
 
 export {
   CreateRequirementsConfigSchema,
-  PaymentRequirementsSchema,
-  PaymentPayloadSchema,
   Response402Schema,
   InitResultSchema,
   ProcessResultSchema,
@@ -41,3 +39,5 @@ export {
   SettleResultSchema,
   ParsedPaymentSchema,
 } from "./schemas";
+
+export { PaymentRequirementsSchema, PaymentPayloadSchema } from "@wtflabs/x402/types";

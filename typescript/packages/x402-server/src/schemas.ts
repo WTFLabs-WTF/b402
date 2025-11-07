@@ -1,3 +1,8 @@
+import {
+  NetworkSchema,
+  PaymentPayloadSchema,
+  PaymentRequirementsSchema,
+} from "@wtflabs/x402/types";
 import { z } from "zod";
 
 /**
@@ -22,8 +27,8 @@ const isIntegerString = (value: string) => {
  * @example
  * ```typescript
  * const config = {
- *   token: "0x1234567890abcdef1234567890abcdef12345678",
- *   amount: "1000",
+ *   asset: "0x1234567890abcdef1234567890abcdef12345678",
+ *   maxAmountRequired: "1000",
  * };
  * ```
  *
@@ -31,12 +36,18 @@ const isIntegerString = (value: string) => {
  */
 export const CreateRequirementsConfigSchema = z.object({
   // 必填
-  token: z.string().regex(EthAddressRegex, "Invalid token address"),
-  amount: z.string().refine(isIntegerString, "Amount must be a non-negative integer string"),
+  asset: z.string().regex(EthAddressRegex, "Invalid token address"),
+  maxAmountRequired: z
+    .string()
+    .refine(isIntegerString, "Amount must be a non-negative integer string"),
 
   // 可选 - 网络和 scheme
-  network: z.string().optional(),
-  scheme: z.string().optional(),
+  network: NetworkSchema,
+  scheme: z.literal("exact").optional(),
+  outputSchema: z.record(z.any()).optional(),
+
+  // 可选 - 额外信息
+  extra: z.record(z.any()).optional(),
 
   // 可选 - 支付类型
   paymentType: z.enum(["permit", "eip3009", "permit2", "auto"]).optional(),
@@ -45,7 +56,7 @@ export const CreateRequirementsConfigSchema = z.object({
   resource: z.string().url().optional().or(z.literal("")),
   description: z.string().optional(),
   mimeType: z.string().optional(),
-  timeout: z.number().int().positive().optional(),
+  maxTimeoutSeconds: z.number().int().positive().optional(),
 
   // 可选 - 性能控制
   autoDetect: z.boolean().optional(),
@@ -80,27 +91,6 @@ export type CreateRequirementsConfig = z.infer<typeof CreateRequirementsConfigSc
  *
  * @returns PaymentRequirementsSchema
  */
-export const PaymentRequirementsSchema = z.object({
-  x402Version: z.literal(1),
-  scheme: z.string(),
-  network: z.string(),
-  maxAmountRequired: z.string().refine(isIntegerString),
-  payTo: z.string().regex(EthAddressRegex),
-  asset: z.string().regex(EthAddressRegex),
-  maxTimeoutSeconds: z.number().int().positive(),
-  resource: z.string(),
-  description: z.string(),
-  mimeType: z.string(),
-  paymentType: z.enum(["permit", "eip3009", "permit2"]).optional(),
-  extra: z
-    .object({
-      relayer: z.string().regex(EthAddressRegex).optional(),
-      name: z.string().optional(),
-      version: z.string().optional(),
-    })
-    .passthrough()
-    .optional(),
-});
 
 export type PaymentRequirements = z.infer<typeof PaymentRequirementsSchema>;
 
@@ -114,8 +104,8 @@ export type PaymentRequirements = z.infer<typeof PaymentRequirementsSchema>;
  *   scheme: "exact",
  *   network: "ethereum-mainnet",
  *   payload: {
- *     amount: "1000",
- *     token: "0x1234567890abcdef1234567890abcdef12345678",
+ *     maxAmountRequired: "1000",
+ *     asset: "0x1234567890abcdef1234567890abcdef12345678",
  *     recipient: "0x1234567890abcdef1234567890abcdef12345678",
  *     nonce: "1234567890abcdef1234567890abcdef12345678",
  *     expiration: 1715000000,
@@ -123,12 +113,12 @@ export type PaymentRequirements = z.infer<typeof PaymentRequirementsSchema>;
  * };
  * ```
  */
-export const PaymentPayloadSchema = z.object({
-  x402Version: z.number(),
-  scheme: z.string(),
-  network: z.string(),
-  payload: z.any(),
-});
+// export const PaymentPayloadSchema = z.object({
+//   x402Version: z.number(),
+//   scheme: z.literal("exact"),
+//   network: z.string(),
+//   payload: z.any(),
+// });
 
 export type PaymentPayload = z.infer<typeof PaymentPayloadSchema>;
 

@@ -60,12 +60,12 @@ describe("X402Server", () => {
   describe("createRequirements", () => {
     it("should create payment requirements with auto-detect", async () => {
       const requirements = await server.createRequirements({
-        token: USDC,
-        amount: "1000",
+        asset: USDC,
+        maxAmountRequired: "1000",
+        network: "bsc",
       });
 
       expect(requirements).toBeDefined();
-      expect(requirements.x402Version).toBe(1);
       expect(requirements.scheme).toBe("exact");
       expect(requirements.maxAmountRequired).toBe("1000");
       expect(requirements.asset).toBe(USDC);
@@ -74,10 +74,11 @@ describe("X402Server", () => {
 
     it("should create requirements with manual paymentType", async () => {
       const requirements = await server.createRequirements({
-        token: USDC,
-        amount: "1000",
+        asset: USDC,
+        maxAmountRequired: "1000",
         paymentType: "permit",
         autoDetect: false,
+        network: "bsc",
       });
 
       expect(requirements.paymentType).toBe("permit");
@@ -88,9 +89,10 @@ describe("X402Server", () => {
     it("should throw error if autoDetect is false without paymentType", async () => {
       await expect(
         server.createRequirements({
-          token: USDC,
-          amount: "1000",
+          asset: USDC,
+          maxAmountRequired: "1000",
           autoDetect: false,
+          network: "bsc",
         }),
       ).rejects.toThrow("Must specify paymentType when autoDetect is false");
     });
@@ -99,10 +101,11 @@ describe("X402Server", () => {
   describe("parse", () => {
     it("should return 402 if payment header is missing", async () => {
       const requirements = await server.createRequirements({
-        token: USDC,
-        amount: "1000",
+        asset: USDC,
+        maxAmountRequired: "1000",
         autoDetect: false,
         paymentType: "permit",
+        network: "bsc",
       });
 
       const result = server.parse(undefined, requirements);
@@ -115,10 +118,11 @@ describe("X402Server", () => {
 
     it("should return 402 if payment header is invalid", async () => {
       const requirements = await server.createRequirements({
-        token: USDC,
-        amount: "1000",
+        asset: USDC,
+        maxAmountRequired: "1000",
         autoDetect: false,
         paymentType: "permit",
+        network: "bsc",
       });
 
       const result = server.parse("invalid-base64", requirements);
@@ -133,10 +137,11 @@ describe("X402Server", () => {
   describe("get402Response", () => {
     it("should generate 402 response", async () => {
       const requirements = await server.createRequirements({
-        token: USDC,
-        amount: "1000",
+        asset: USDC,
+        maxAmountRequired: "1000",
         autoDetect: false,
         paymentType: "permit",
+        network: "bsc",
       });
 
       const response = server.get402Response(requirements, "test_error");

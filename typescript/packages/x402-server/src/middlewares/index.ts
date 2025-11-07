@@ -3,8 +3,19 @@
  */
 
 export { createExpressMiddleware } from "./express";
-export type { ExpressMiddlewareOptions } from "./express";
+export type {
+  ExpressMiddlewareOptions,
+  ExpressRequest,
+  ExpressResponse,
+  ExpressNextFunction,
+  ExpressMiddleware,
+} from "./express";
 
 export { createHonoMiddleware } from "./hono";
-export type { HonoMiddlewareOptions } from "./hono";
-
+export type {
+  HonoMiddlewareOptions,
+  HonoContext,
+  HonoRequest,
+  HonoNext,
+  HonoMiddlewareHandler,
+} from "./hono";

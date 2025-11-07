@@ -3,13 +3,36 @@
  */
 
 import type { X402Server } from "../server";
-import type { CreateRequirementsConfig } from "../schemas";
+import type { CreateRequirementsConfig, Response402 } from "../schemas";
 
 /**
- * Hono types (避免直接导入 hono，因为它是可选依赖)
+ * Hono-like Request 接口
  */
-type Context = any;
-type MiddlewareHandler = any;
+export interface HonoRequest {
+  header(name: string): string | undefined;
+  json<T = unknown>(): Promise<T>;
+  query(name: string): string | undefined;
+}
+
+/**
+ * Hono-like Context 接口
+ */
+export interface HonoContext {
+  req: HonoRequest;
+  json(body: unknown, status?: number): Response;
+  set(key: string, value: unknown): void;
+  get(key: string): unknown;
+}
+
+/**
+ * Hono-like Next 函数
+ */
+export type HonoNext = () => Promise<void>;
+
+/**
+ * Hono 中间件函数类型
+ */
+export type HonoMiddlewareHandler = (c: HonoContext, next: HonoNext) => Promise<Response | void>;
 
 /**
  * Hono 中间件配置选项
@@ -19,22 +42,24 @@ export interface HonoMiddlewareOptions {
   server: X402Server;
 
   /** 获取 token 地址的函数 */
-  getToken: (c: Context) => string | Promise<string>;
+  getToken: (c: HonoContext) => string | Promise<string>;
 
   /** 获取金额的函数 */
-  getAmount: (c: Context) => string | Promise<string>;
+  getAmount: (c: HonoContext) => string | Promise<string>;
 
   /** 可选：获取额外配置的函数 */
-  getConfig?: (c: Context) => Partial<CreateRequirementsConfig> | Promise<Partial<CreateRequirementsConfig>>;
+  getConfig?: (
+    c: HonoContext,
+  ) => Partial<CreateRequirementsConfig> | Promise<Partial<CreateRequirementsConfig>>;
 
   /** 可选：自定义错误处理 */
-  onError?: (error: Error, c: Context) => Response | Promise<Response>;
+  onError?: (error: Error, c: HonoContext) => Response | Promise<Response>;
 
   /** 可选：自定义 402 响应处理 */
-  on402?: (c: Context, response402: any) => Response | Promise<Response>;
+  on402?: (c: HonoContext, response402: Response402) => Response | Promise<Response>;
 
   /** 可选：支付成功后的回调 */
-  onPaymentSuccess?: (c: Context, payer: string, txHash: string) => void | Promise<void>;
+  onPaymentSuccess?: (c: HonoContext, payer: string, txHash: string) => void | Promise<void>;
 }
 
 /**
@@ -61,8 +86,8 @@ export interface HonoMiddlewareOptions {
  * });
  * ```
  */
-export function createHonoMiddleware(options: HonoMiddlewareOptions): MiddlewareHandler {
-  return async (c: Context, next: any) => {
+export function createHonoMiddleware(options: HonoMiddlewareOptions): HonoMiddlewareHandler {
+  return async (c: HonoContext, next: HonoNext) => {
     try {
       // 1. 获取 token 和 amount
       const token = await options.getToken(c);
@@ -71,12 +96,16 @@ export function createHonoMiddleware(options: HonoMiddlewareOptions): Middleware
       // 2. 获取额外配置
       const extraConfig = options.getConfig ? await options.getConfig(c) : {};
 
-      // 3. 创建支付要求
+      // 3. 创建支付要求（过滤掉 undefined 值）
+      const filteredConfig = Object.fromEntries(
+        Object.entries(extraConfig).filter(([, value]) => value !== undefined),
+      );
+
       const requirements = await options.server.createRequirements({
-        token,
-        amount,
-        ...extraConfig,
-      });
+        asset: token,
+        maxAmountRequired: amount,
+        ...filteredConfig,
+      } as CreateRequirementsConfig);
 
       // 4. 处理支付
       const paymentHeader = c.req.header("x-payment");
@@ -123,16 +152,3 @@ export function createHonoMiddleware(options: HonoMiddlewareOptions): Middleware
     }
   };
 }
-
-/**
- * 扩展 Hono Context 类型
- * 注意：这个扩展只在安装了 hono 时生效
- */
-/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-interface HonoContextVariableMap {
-  x402?: {
-    payer: string;
-    txHash: string;
-  };
-}
-

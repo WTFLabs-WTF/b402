@@ -3,14 +3,35 @@
  */
 
 import type { X402Server } from "../server";
-import type { CreateRequirementsConfig } from "../schemas";
+import type { CreateRequirementsConfig, Response402 } from "../schemas";
 
 /**
- * Express types (避免直接导入 express，因为它是可选依赖)
+ * Express-like Request 接口
+ * 定义最小化的类型，避免直接依赖 express
  */
-type Request = any;
-type Response = any;
-type NextFunction = any;
+export interface ExpressRequest {
+  headers: Record<string, string | string[] | undefined>;
+  body?: unknown;
+  params?: Record<string, string>;
+  query?: Record<string, string | string[] | undefined>;
+  x402?: {
+    payer: string;
+    txHash: string;
+  };
+}
+
+/**
+ * Express-like Response 接口
+ */
+export interface ExpressResponse {
+  status(code: number): this;
+  json(body: unknown): this;
+}
+
+/**
+ * Express-like NextFunction 类型
+ */
+export type ExpressNextFunction = (error?: Error) => void;
 
 /**
  * Express 中间件配置选项
@@ -20,22 +41,24 @@ export interface ExpressMiddlewareOptions {
   server: X402Server;
 
   /** 获取 token 地址的函数 */
-  getToken: (req: Request) => string | Promise<string>;
+  getToken: (req: ExpressRequest) => string | Promise<string>;
 
   /** 获取金额的函数 */
-  getAmount: (req: Request) => string | Promise<string>;
+  getAmount: (req: ExpressRequest) => string | Promise<string>;
 
   /** 可选：获取额外配置的函数 */
-  getConfig?: (req: Request) => Partial<CreateRequirementsConfig> | Promise<Partial<CreateRequirementsConfig>>;
+  getConfig?: (
+    req: ExpressRequest,
+  ) => Partial<CreateRequirementsConfig> | Promise<Partial<CreateRequirementsConfig>>;
 
   /** 可选：自定义错误处理 */
-  onError?: (error: Error, req: Request, res: Response) => void;
+  onError?: (error: Error, req: ExpressRequest, res: ExpressResponse) => void;
 
   /** 可选：自定义 402 响应处理 */
-  on402?: (req: Request, res: Response, response402: any) => void;
+  on402?: (req: ExpressRequest, res: ExpressResponse, response402: Response402) => void;
 
   /** 可选：支付成功后的回调 */
-  onPaymentSuccess?: (req: Request, payer: string, txHash: string) => void | Promise<void>;
+  onPaymentSuccess?: (req: ExpressRequest, payer: string, txHash: string) => void | Promise<void>;
 }
 
 /**
@@ -60,7 +83,7 @@ export interface ExpressMiddlewareOptions {
  * ```
  */
 export function createExpressMiddleware(options: ExpressMiddlewareOptions) {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return async (req: ExpressRequest, res: ExpressResponse, next: ExpressNextFunction) => {
     try {
       // 1. 获取 token 和 amount
       const token = await options.getToken(req);
@@ -69,12 +92,16 @@ export function createExpressMiddleware(options: ExpressMiddlewareOptions) {
       // 2. 获取额外配置
       const extraConfig = options.getConfig ? await options.getConfig(req) : {};
 
-      // 3. 创建支付要求
+      // 3. 创建支付要求（过滤掉 undefined 值）
+      const filteredConfig = Object.fromEntries(
+        Object.entries(extraConfig).filter(([, value]) => value !== undefined),
+      );
+
       const requirements = await options.server.createRequirements({
-        token,
-        amount,
-        ...extraConfig,
-      });
+        asset: token,
+        maxAmountRequired: amount,
+        ...filteredConfig,
+      } as CreateRequirementsConfig);
 
       // 4. 处理支付
       const paymentHeader = req.headers["x-payment"] as string | undefined;
@@ -93,7 +120,7 @@ export function createExpressMiddleware(options: ExpressMiddlewareOptions) {
 
       // 6. 支付成功
       // 将支付信息附加到 req 对象
-      (req as any).x402 = {
+      req.x402 = {
         payer: result.data.payer,
         txHash: result.data.txHash,
       };
@@ -121,19 +148,10 @@ export function createExpressMiddleware(options: ExpressMiddlewareOptions) {
 }
 
 /**
- * 扩展 Express Request 类型
- * 注意：这个扩展只在安装了 @types/express 时生效
+ * Express 中间件函数类型
  */
-/* eslint-disable @typescript-eslint/no-namespace */
-declare global {
-  namespace Express {
-    interface Request {
-      x402?: {
-        payer: string;
-        txHash: string;
-      };
-    }
-  }
-}
-/* eslint-enable @typescript-eslint/no-namespace */
-
+export type ExpressMiddleware = (
+  req: ExpressRequest,
+  res: ExpressResponse,
+  next: ExpressNextFunction,
+) => void | Promise<void>;

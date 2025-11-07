@@ -13,13 +13,10 @@ import type {
   SettleResult,
   ParsedPayment,
 } from "./types";
-import {
-  CreateRequirementsConfigSchema,
-  PaymentRequirementsSchema,
-  PaymentPayloadSchema,
-} from "./schemas";
+import { CreateRequirementsConfigSchema } from "./schemas";
 import type { CreateRequirementsConfig } from "./schemas";
 import { decodeBase64 } from "./utils";
+import { PaymentPayloadSchema, PaymentRequirementsSchema } from "@wtflabs/x402/types";
 
 /**
  * X402 Server
@@ -45,8 +42,8 @@ import { decodeBase64 } from "./utils";
  *
  * // 4. 创建支付要求
  * const requirements = await server.createRequirements({
- *   token: tokenAddress,
- *   amount: "1000",
+ *   asset: tokenAddress,
+ *   maxAmountRequired: "1000",
  * });
  *
  * // 5. 处理支付
@@ -120,16 +117,16 @@ export class X402Server {
 
     if (validatedConfig.autoDetect !== false) {
       // 自动检测模式（默认）
-      const result = await this.detector.detect(validatedConfig.token);
+      const result = await this.detector.detect(validatedConfig.asset);
 
       // 确定支付类型
       if (validatedConfig.paymentType && validatedConfig.paymentType !== "auto") {
         paymentType = validatedConfig.paymentType;
       } else {
-        const recommendedMethod = await this.detector.getRecommendedMethod(validatedConfig.token);
+        const recommendedMethod = await this.detector.getRecommendedMethod(validatedConfig.asset);
         if (!recommendedMethod) {
           throw new Error(
-            `Token ${validatedConfig.token} does not support advanced payment methods`,
+            `Token ${validatedConfig.asset} does not support advanced payment methods`,
           );
         }
         paymentType = recommendedMethod;
@@ -146,20 +143,20 @@ export class X402Server {
     }
 
     // 构建支付要求（未验证的对象）
-    const requirements = {
-      x402Version: 1 as const,
+    const requirements: PaymentRequirements = {
       scheme: validatedConfig.scheme || "exact",
       network,
-      maxAmountRequired: validatedConfig.amount,
+      maxAmountRequired: validatedConfig.maxAmountRequired,
       payTo: this.facilitator.recipientAddress,
-      asset: validatedConfig.token,
-      maxTimeoutSeconds: validatedConfig.timeout || 300,
+      asset: validatedConfig.asset,
+      maxTimeoutSeconds: validatedConfig.maxTimeoutSeconds || 300,
       resource: validatedConfig.resource || "",
       description: validatedConfig.description || "",
       mimeType: validatedConfig.mimeType || "application/json",
       paymentType,
+      outputSchema: validatedConfig.outputSchema,
       extra: {
-        relayer: this.facilitator.relayer,
+        ...(validatedConfig.extra || {}),
         ...(tokenName && { name: tokenName }),
         ...(tokenVersion && { version: tokenVersion }),
       },
