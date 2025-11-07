@@ -42,7 +42,7 @@ export const CreateRequirementsConfigSchema = z.object({
     .refine(isIntegerString, "Amount must be a non-negative integer string"),
 
   // 可选 - 网络和 scheme
-  network: NetworkSchema,
+  network: NetworkSchema.optional(),
   scheme: z.literal("exact").optional(),
   outputSchema: z.record(z.any()).optional(),
 

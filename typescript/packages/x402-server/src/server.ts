@@ -16,8 +16,12 @@ import type {
 import { CreateRequirementsConfigSchema } from "./schemas";
 import type { CreateRequirementsConfig } from "./schemas";
 import { decodeBase64 } from "./utils";
-import { PaymentPayloadSchema, PaymentRequirementsSchema } from "@wtflabs/x402/types";
-
+import {
+  NetworkSchema,
+  PaymentPayloadSchema,
+  PaymentRequirementsSchema,
+} from "@wtflabs/x402/types";
+import z from "zod";
 /**
  * X402 Server
  *
@@ -145,7 +149,7 @@ export class X402Server {
     // 构建支付要求（未验证的对象）
     const requirements: PaymentRequirements = {
       scheme: validatedConfig.scheme || "exact",
-      network,
+      network: network as z.infer<typeof NetworkSchema>,
       maxAmountRequired: validatedConfig.maxAmountRequired,
       payTo: this.facilitator.recipientAddress,
       asset: validatedConfig.asset,
