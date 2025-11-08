@@ -12,7 +12,6 @@
   "dependencies": {
     "@wtflabs/x402-facilitator": "workspace:*",
     "@wtflabs/x402-fetch": "workspace:*",
-    "@wtflabs/x402-schema": "workspace:*",
     "@wtflabs/x402-server": "workspace:*",
     "dotenv": "^16.4.7",
     "next": "15.1.7",

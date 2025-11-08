@@ -15,7 +15,7 @@ import {
 } from "../../../../types/verify";
 import { SCHEME } from "../../../exact";
 import { splitSignature } from "./sign";
-import { permitProxyContractABI } from "../../../../types/shared/evm/permitProxyABI";
+import { EIP7702SellerWalletMinimalAbi } from "../../../../types/shared/evm";
 
 /**
  * Verifies an EIP-2612 Permit payment payload
@@ -117,28 +117,14 @@ export async function verify<
     };
   }
 
-  // Verify spender matches the facilitator's wallet address or relayer
-  // In x402, the facilitator acts as the spender to execute transferFrom
-  // The client must authorize the facilitator's wallet address as the spender
-  // If relayer is used, verify the spender matches the relayer
-  if (paymentRequirements.extra?.relayer) {
-    // When using relayer, the spender should be the relayer
-    if (getAddress(spender) !== getAddress(paymentRequirements.extra?.relayer)) {
-      return {
-        isValid: false,
-        invalidReason: "invalid_spender_address",
-        payer: owner,
-      };
-    }
-  } else {
-    // When not using relayer, the spender should be the facilitator's wallet
-    if (client.account && getAddress(spender) !== getAddress(client.account.address)) {
-      return {
-        isValid: false,
-        invalidReason: "invalid_spender_address",
-        payer: owner,
-      };
-    }
+  // Verify spender matches the payTo address (7702 contract)
+  // The client must authorize the 7702 contract (payTo address) as the spender
+  if (getAddress(spender) !== getAddress(paymentRequirements.payTo as string)) {
+    return {
+      isValid: false,
+      invalidReason: "invalid_spender_address",
+      payer: owner,
+    };
   }
 
   // Verify owner has sufficient balance
@@ -204,90 +190,39 @@ export async function settle<transport extends Transport, chain extends Chain>(
     };
   }
 
-  const { owner, spender, value, deadline } = permitPayload.authorization;
+  const { owner, value, deadline } = permitPayload.authorization;
   const { v, r, s } = splitSignature(permitPayload.signature as Hex);
   const tokenAddress = paymentRequirements.asset as Address;
 
-  // 获取 facilitator 的当前 nonce
-  const txNonce = await wallet.getTransactionCount({
-    address: wallet.account.address,
+  // 调用 7702 合约的 settleWithPermit 方法
+  // 7702 合约会处理 permit 和 transfer，并自动收取手续费
+  const transactionHash = await wallet.writeContract({
+    address: paymentRequirements.payTo as Address,
+    abi: EIP7702SellerWalletMinimalAbi,
+    functionName: "settleWithPermit",
+    args: [
+      tokenAddress, // token
+      owner as Address, // payer
+      BigInt(value), // amount
+      BigInt(deadline), // deadline
+      v, // v
+      r, // r
+      s, // s
+    ],
+    chain: wallet.chain as Chain,
   });
 
-  let transactionHash: Hex;
+  // 等待交易确认
+  const receipt = await wallet.waitForTransactionReceipt({ hash: transactionHash });
 
-  if (paymentRequirements.extra?.relayer) {
-    // 使用 relayer 合约执行 settleWithPermit
-    // 新合约会处理 permit 和 transfer，并可能收取手续费
-    transactionHash = await wallet.writeContract({
-      address: paymentRequirements.extra.relayer as Address,
-      abi: permitProxyContractABI,
-      functionName: "settleWithPermit",
-      args: [
-        tokenAddress, // token
-        owner as Address, // payer
-        paymentRequirements.payTo as Address, // seller
-        BigInt(value), // amount
-        BigInt(deadline), // deadline
-        v, // v
-        r, // r
-        s, // s
-      ],
-      chain: wallet.chain as Chain,
-      nonce: txNonce,
-    });
-
-    // 等待交易确认
-    const receipt = await wallet.waitForTransactionReceipt({ hash: transactionHash });
-
-    if (receipt.status !== "success") {
-      return {
-        success: false,
-        errorReason: "transaction_failed",
-        transaction: transactionHash,
-        network: paymentPayload.network,
-        payer: owner,
-      };
-    }
-  } else {
-    // 原有的 permit + transferFrom 逻辑
-    const [permitTx, transferTx] = await Promise.all([
-      // Call permit to approve the spender
-      wallet.writeContract({
-        address: tokenAddress,
-        abi: erc20PermitABI,
-        functionName: "permit",
-        args: [owner as Address, spender as Address, BigInt(value), BigInt(deadline), v, r, s],
-        chain: wallet.chain as Chain,
-        nonce: txNonce,
-      }),
-      // Call transferFrom to transfer tokens to payTo address
-      wallet.writeContract({
-        address: tokenAddress,
-        abi: erc20PermitABI,
-        functionName: "transferFrom",
-        args: [owner as Address, paymentRequirements.payTo as Address, BigInt(value)],
-        chain: wallet.chain as Chain,
-        nonce: txNonce + 1,
-      }),
-    ]);
-
-    // 等待两笔交易都确认
-    const [, receipt] = await Promise.all([
-      wallet.waitForTransactionReceipt({ hash: permitTx }),
-      wallet.waitForTransactionReceipt({ hash: transferTx }),
-    ]);
-
-    if (receipt.status !== "success") {
-      return {
-        success: false,
-        errorReason: "transaction_failed",
-        transaction: transferTx,
-        network: paymentPayload.network,
-        payer: owner,
-      };
-    }
-
-    transactionHash = transferTx;
+  if (receipt.status !== "success") {
+    return {
+      success: false,
+      errorReason: "transaction_failed",
+      transaction: transactionHash,
+      network: paymentPayload.network,
+      payer: owner,
+    };
   }
 
   return {

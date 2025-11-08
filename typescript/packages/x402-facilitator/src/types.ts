@@ -13,11 +13,6 @@ export interface FacilitatorConfig {
   recipientAddress: string;
 
   /**
-   * 中继地址 (可选，默认使用内置 WTF Facilitator)
-   */
-  relayer?: string;
-
-  /**
    * 等待策略
    * - "simulated": 仅模拟交易 (最快)
    * - "submitted": 等待交易提交

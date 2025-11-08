@@ -15,7 +15,6 @@
     "viem": "^2.23.5",
     "axios": "^1.7.9",
     "better-sqlite3": "^11.7.0",
-    "@wtflabs/x402-schema": "workspace:*",
     "@wtflabs/x402-facilitator": "workspace:*",
     "@wtflabs/x402-server": "workspace:*",
     "@wtflabs/x402-fetch": "workspace:*"

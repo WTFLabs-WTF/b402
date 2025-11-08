@@ -34,7 +34,7 @@ export function preparePaymentHeader(
       signature: undefined,
       authorization: {
         owner: from,
-        spender: paymentRequirements.extra?.relayer || (paymentRequirements.payTo as Address),
+        spender: paymentRequirements.payTo as Address,
         value: paymentRequirements.maxAmountRequired,
         deadline,
       },

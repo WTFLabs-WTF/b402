@@ -14,11 +14,6 @@ import type {
 const DEFAULT_FACILITATOR_URL = "https://facilitator.wtf.com/v1";
 
 /**
- * 默认 Relayer 地址
- */
-const DEFAULT_RELAYER_ADDRESS = "0x877D0A51a37178b5F34Ffb68a5c2beD0ff46D432";
-
-/**
  * Facilitator 类
  * 用于处理支付验证和结算
  *
@@ -26,7 +21,6 @@ const DEFAULT_RELAYER_ADDRESS = "0x877D0A51a37178b5F34Ffb68a5c2beD0ff46D432";
  * ```typescript
  * const facilitator = new Facilitator({
  *   recipientAddress: "0x1234...",
- *   relayer: "0x5678...", // 可选
  *   waitUntil: "confirmed", // 可选
  * });
  *
@@ -57,7 +51,6 @@ export class Facilitator {
 
     this.config = {
       recipientAddress: config.recipientAddress,
-      relayer: config.relayer || DEFAULT_RELAYER_ADDRESS,
       waitUntil: config.waitUntil || "confirmed",
       baseUrl: config.baseUrl || DEFAULT_FACILITATOR_URL,
       apiKey: config.apiKey || "",
@@ -68,13 +61,6 @@ export class Facilitator {
         Authorization: `Bearer ${this.config.apiKey}`,
       }
       : {};
-  }
-
-  /**
-   * 获取 relayer 地址
-   */
-  get relayer(): string {
-    return this.config.relayer;
   }
 
   /**

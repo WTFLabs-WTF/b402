@@ -39,7 +39,7 @@ export function preparePaymentHeader(
       signature: undefined,
       authorization: {
         from,
-        to: (paymentRequirements.extra?.relayer || paymentRequirements.payTo) as Address,
+        to: paymentRequirements.payTo as Address,
         value: paymentRequirements.maxAmountRequired,
         validAfter: validAfter.toString(),
         validBefore: validBefore.toString(),

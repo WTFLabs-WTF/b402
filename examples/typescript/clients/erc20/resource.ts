@@ -35,7 +35,7 @@ const facilitator = new Facilitator({
   recipientAddress: RECIPIENT_ADDRESS,
   // relayer: "0x...", // 可选，默认使用 recipientAddress
   waitUntil: "confirmed", // simulated | submitted | confirmed
-  baseUrl: "http://49.12.148.53:3000", // 可选
+  baseUrl: "https://facilitator.wtf.com", // 可选
   // apiKey: "your-api-key", // 可选
 });
 
