@@ -123,12 +123,18 @@ export type PaymentRequirements = z.infer<typeof PaymentRequirementsSchema>;
 export type PaymentPayload = z.infer<typeof PaymentPayloadSchema>;
 
 /**
+ * Payment Error Stage
+ */
+export type PaymentErrorStage = "parse" | "verify" | "settle";
+
+/**
  * Response402 Schema
  */
 export const Response402Schema = z.object({
   x402Version: z.literal(1),
   accepts: z.array(PaymentRequirementsSchema),
   error: z.string().optional(),
+  errorStage: z.enum(["parse", "verify", "settle"]).optional(),
 });
 
 export type Response402 = z.infer<typeof Response402Schema>;
@@ -158,7 +164,15 @@ export const ProcessResultSchema = z.discriminatedUnion("success", [
   z.object({
     success: z.literal(false),
     status: z.literal(402),
+    errorStage: z.enum(["parse", "verify"]),
     response: Response402Schema,
+  }),
+  z.object({
+    success: z.literal(false),
+    status: z.literal(500),
+    errorStage: z.literal("settle"),
+    response: Response402Schema,
+    error: z.string(),
   }),
 ]);
 

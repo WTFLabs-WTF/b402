@@ -113,11 +113,13 @@ export function createHonoMiddleware(options: HonoMiddlewareOptions): HonoMiddle
 
       // 5. 处理结果
       if (!result.success) {
-        // 支付失败，返回 402
-        if (options.on402) {
+        // 支付失败，根据错误阶段返回不同状态码
+        // - parse/verify 失败: 402 (客户端需要重新支付)
+        // - settle 失败: 500 (服务端错误)
+        if (options.on402 && result.status === 402) {
           return options.on402(c, result.response);
         } else {
-          return c.json(result.response, 402);
+          return c.json(result.response, result.status);
         }
       }
 

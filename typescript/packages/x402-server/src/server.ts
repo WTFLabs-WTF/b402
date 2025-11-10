@@ -146,6 +146,8 @@ export class X402Server {
       paymentType = validatedConfig.paymentType;
     }
 
+    // TODO: 检测 facilitator supported 是否满足当前 asset 的支付要求
+
     // 构建支付要求（未验证的对象）
     const requirements: PaymentRequirements = {
       scheme: validatedConfig.scheme || "exact",
@@ -188,7 +190,11 @@ export class X402Server {
       return {
         success: false,
         status: 402,
-        response: parsed.response402,
+        errorStage: "parse",
+        response: {
+          ...parsed.response402,
+          errorStage: "parse",
+        },
       };
     }
 
@@ -198,17 +204,21 @@ export class X402Server {
       return {
         success: false,
         status: 402,
-        response: this.get402Response(expectedRequirements, verified.error),
+        errorStage: "verify",
+        response: this.get402Response(expectedRequirements, verified.error, "verify"),
       };
     }
 
     // 3. 结算
     const settled = await this.settle(parsed.data);
     if (!settled.success) {
+      // 结算失败返回 500（服务端错误）
       return {
         success: false,
-        status: 402,
-        response: this.get402Response(expectedRequirements, settled.error),
+        status: 500,
+        errorStage: "settle",
+        response: this.get402Response(expectedRequirements, settled.error, "settle"),
+        error: settled.error,
       };
     }
 
@@ -363,13 +373,19 @@ export class X402Server {
    *
    * @param requirements - 支付要求
    * @param error - 可选的错误信息
+   * @param errorStage - 可选的错误阶段
    * @returns 402 响应对象
    */
-  get402Response(requirements: PaymentRequirements, error?: string): Response402 {
+  get402Response(
+    requirements: PaymentRequirements,
+    error?: string,
+    errorStage?: "parse" | "verify" | "settle",
+  ): Response402 {
     return {
       x402Version: 1,
       accepts: [requirements],
       error,
+      errorStage,
     };
   }
 
