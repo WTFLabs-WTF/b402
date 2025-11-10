@@ -212,12 +212,14 @@ export async function verify<
  * @param wallet - The facilitator wallet that will execute the permit transfer
  * @param paymentPayload - The signed payment payload containing permit2 parameters and signature
  * @param paymentRequirements - The payment requirements
+ * @param gasPrice - Optional gas price in wei (defaults to 0.05 gwei)
  * @returns A SettleResponse containing the transaction status and hash
  */
 export async function settle<transport extends Transport, chain extends Chain>(
   wallet: SignerWallet<chain, transport>,
   paymentPayload: Permit2PaymentPayload,
   paymentRequirements: PaymentRequirements,
+  gasPrice: bigint = 50000000n, // 0.05 gwei
 ): Promise<SettleResponse> {
   const permit2Payload = paymentPayload.payload;
 
@@ -276,6 +278,7 @@ export async function settle<transport extends Transport, chain extends Chain>(
         permit2Payload.signature as Hex,
       ],
       chain: wallet.chain as Chain,
+      gasPrice,
     })
     : await wallet.writeContract({
       address: PERMIT2_ADDRESS,
@@ -298,6 +301,7 @@ export async function settle<transport extends Transport, chain extends Chain>(
         permit2Payload.signature as Hex,
       ],
       chain: wallet.chain as Chain,
+      gasPrice,
     });
 
   const receipt = await wallet.waitForTransactionReceipt({ hash: tx });

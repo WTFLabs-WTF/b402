@@ -83,6 +83,7 @@ export async function verify<
  * @param payload - The signed payment payload containing transfer parameters and signature
  * @param paymentRequirements - The payment requirements that the payload must satisfy
  * @param config - Optional configuration for X402 operations (e.g., custom RPC URLs)
+ * @param gasPrice - Optional gas price in wei (defaults to 0.05 gwei)
  * @returns A SettleResponse indicating if the payment is settled and any settlement reason
  */
 export async function settle<transport extends Transport, chain extends Chain>(
@@ -90,6 +91,7 @@ export async function settle<transport extends Transport, chain extends Chain>(
   payload: PaymentPayload,
   paymentRequirements: PaymentRequirements,
   config?: X402Config,
+  gasPrice: bigint = 50000000n, // 0.05 gwei
 ): Promise<SettleResponse> {
   // exact scheme
   if (paymentRequirements.scheme === "exact") {
@@ -99,6 +101,7 @@ export async function settle<transport extends Transport, chain extends Chain>(
         client as EvmSignerWallet<chain, transport>,
         payload,
         paymentRequirements,
+        gasPrice,
       );
     }
 

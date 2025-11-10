@@ -197,12 +197,14 @@ export async function verify<
  * @param wallet - The facilitator wallet that will submit the transaction
  * @param paymentPayload - The signed payment payload containing the transfer parameters and signature
  * @param paymentRequirements - The original payment details that were used to create the payload
+ * @param gasPrice - Optional gas price in wei (defaults to 0.05 gwei)
  * @returns A PaymentExecutionResponse containing the transaction status and hash
  */
 export async function settle<transport extends Transport, chain extends Chain>(
   wallet: SignerWallet<chain, transport>,
   paymentPayload: Eip3009PaymentPayload,
   paymentRequirements: PaymentRequirements,
+  gasPrice: bigint = 50000000n, // 0.05 gwei
 ): Promise<SettleResponse> {
   const payload = paymentPayload.payload as ExactEvmPayload;
 
@@ -257,6 +259,7 @@ export async function settle<transport extends Transport, chain extends Chain>(
       s, // s (bytes32)
     ],
     chain: wallet.chain as Chain,
+    gasPrice,
   });
 
   const receipt = await wallet.waitForTransactionReceipt({ hash: tx });
