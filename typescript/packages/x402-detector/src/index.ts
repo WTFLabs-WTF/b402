@@ -29,7 +29,12 @@ export {
 } from "./constants";
 
 // Export detector functions (with optional logger support)
-export { detectTokenPaymentMethods, getRecommendedPaymentMethod, getTokenInfo } from "./detector";
+export {
+  detectTokenPaymentMethods,
+  getRecommendedPaymentMethod,
+  getTokenInfo,
+  detectSettleMethods,
+} from "./detector";
 
 // Export proxy utilities
 export { getImplementationAddress } from "./proxy";

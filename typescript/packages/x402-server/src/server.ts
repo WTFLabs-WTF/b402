@@ -1,5 +1,5 @@
 import type { PublicClient } from "viem";
-import { TokenDetector } from "@wtflabs/x402-detector";
+import { TokenDetector, detectSettleMethods } from "@wtflabs/x402-detector";
 import { Facilitator } from "@wtflabs/x402-facilitator";
 import type {
   X402ServerConfig,
@@ -91,6 +91,17 @@ export class X402Server {
    */
   async initialize(tokens: string[]): Promise<InitResult> {
     try {
+      const settleMethods = await detectSettleMethods(
+        this.client,
+        this.facilitator.recipientAddress,
+      );
+      if (
+        !settleMethods.supportsSettleWithPermit ||
+        !settleMethods.supportsSettleWithERC3009 ||
+        !settleMethods.supportsSettleWithPermit2
+      ) {
+        throw new Error("Facilitator does not support settle methods");
+      }
       await this.detector.initialize(tokens);
       return { success: true };
     } catch (error) {

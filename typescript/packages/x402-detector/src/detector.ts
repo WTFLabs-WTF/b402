@@ -280,6 +280,100 @@ export async function getRecommendedPaymentMethod(
 }
 
 /**
+ * 检测地址支持的 settle 方法（使用 ERC165）
+ *
+ * @param client - viem PublicClient
+ * @param address - 要检测的地址
+ * @param logger - 可选的 logger
+ * @returns 支持的 settle 方法
+ */
+export async function detectSettleMethods(
+  client: PublicClient,
+  address: string,
+  logger: Logger | null = defaultLogger,
+): Promise<{
+  supportsSettleWithPermit: boolean;
+  supportsSettleWithERC3009: boolean;
+  supportsSettleWithPermit2: boolean;
+}> {
+  const targetAddress = address.toLowerCase() as Address;
+
+  // ERC165 ABI
+  const ERC165_ABI = [
+    {
+      inputs: [{ name: "interfaceId", type: "bytes4" }],
+      name: "supportsInterface",
+      outputs: [{ name: "", type: "bool" }],
+      stateMutability: "view",
+      type: "function",
+    },
+  ] as const;
+
+  // 接口 ID
+  const SETTLE_WITH_PERMIT_INTERFACE_ID = "0x02ccc23e" as const;
+  const SETTLE_WITH_ERC3009_INTERFACE_ID = "0x1fe200d9" as const;
+  const SETTLE_WITH_PERMIT2_INTERFACE_ID = "0xa7fcafbb" as const;
+
+  logger?.log(`🔍 Detecting settle methods for address ${targetAddress}...`);
+
+  // 并行检测三个接口
+  const [supportsSettleWithPermit, supportsSettleWithERC3009, supportsSettleWithPermit2] =
+    await Promise.allSettled([
+      client.readContract({
+        address: targetAddress,
+        abi: ERC165_ABI,
+        functionName: "supportsInterface",
+        args: [SETTLE_WITH_PERMIT_INTERFACE_ID],
+      }),
+      client.readContract({
+        address: targetAddress,
+        abi: ERC165_ABI,
+        functionName: "supportsInterface",
+        args: [SETTLE_WITH_ERC3009_INTERFACE_ID],
+      }),
+      client.readContract({
+        address: targetAddress,
+        abi: ERC165_ABI,
+        functionName: "supportsInterface",
+        args: [SETTLE_WITH_PERMIT2_INTERFACE_ID],
+      }),
+    ]);
+
+  // 解析结果
+  const hasSettleWithPermit =
+    supportsSettleWithPermit.status === "fulfilled" && supportsSettleWithPermit.value === true;
+  const hasSettleWithERC3009 =
+    supportsSettleWithERC3009.status === "fulfilled" && supportsSettleWithERC3009.value === true;
+  const hasSettleWithPermit2 =
+    supportsSettleWithPermit2.status === "fulfilled" && supportsSettleWithPermit2.value === true;
+
+  // 记录日志
+  if (hasSettleWithPermit) {
+    logger?.log("  ✅ settleWithPermit (0x02ccc23e) supported");
+  } else {
+    logger?.log("  ❌ settleWithPermit (0x02ccc23e) not supported");
+  }
+
+  if (hasSettleWithERC3009) {
+    logger?.log("  ✅ settleWithERC3009 (0x1fe200d9) supported");
+  } else {
+    logger?.log("  ❌ settleWithERC3009 (0x1fe200d9) not supported");
+  }
+
+  if (hasSettleWithPermit2) {
+    logger?.log("  ✅ settleWithPermit2 (0xa7fcafbb) supported");
+  } else {
+    logger?.log("  ❌ settleWithPermit2 (0xa7fcafbb) not supported");
+  }
+
+  return {
+    supportsSettleWithPermit: hasSettleWithPermit,
+    supportsSettleWithERC3009: hasSettleWithERC3009,
+    supportsSettleWithPermit2: hasSettleWithPermit2,
+  };
+}
+
+/**
  * 获取 Token 的 name 和 version 信息（用于 EIP-712 签名）
  * 支持代理合约（会自动从代理合约读取，因为代理合约会 delegatecall 到实现合约）
  *
