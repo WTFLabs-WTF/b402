@@ -8,13 +8,13 @@ import {
   isSvmSignerWallet,
   Network,
   X402Config,
-} from "@wtflabs/x402/types";
+} from "x402x/types";
 import {
   createPaymentHeader,
   PaymentRequirementsSelector,
   selectPaymentRequirements,
-} from "@wtflabs/x402/client";
-import { exact } from "@wtflabs/x402/schemes";
+} from "x402x/client";
+import { exact } from "x402x/schemes";
 
 /**
  * Header name for specifying payment type
@@ -170,7 +170,7 @@ export function wrapFetchWithPayment(
   };
 }
 
-export { decodeXPaymentResponse } from "@wtflabs/x402/shared";
+export { decodeXPaymentResponse } from "x402x/shared";
 export {
   createSigner,
   createConnectedClient,
@@ -180,6 +180,6 @@ export {
   type MultiNetworkSigner,
   type X402Config,
   type EvmChainConfig,
-} from "@wtflabs/x402/types";
-export { type PaymentRequirementsSelector } from "@wtflabs/x402/client";
+} from "x402x/types";
+export { type PaymentRequirementsSelector } from "x402x/client";
 export type { Hex, Chain } from "viem";

@@ -1,5 +1,5 @@
 import type { PublicClient } from "viem";
-import type { Facilitator } from "@wtflabs/x402-facilitator";
+import type { Facilitator } from "x402x-facilitator";
 
 /**
  * X402Server 配置选项
@@ -40,4 +40,4 @@ export {
   ParsedPaymentSchema,
 } from "./schemas";
 
-export { PaymentRequirementsSchema, PaymentPayloadSchema } from "@wtflabs/x402/types";
+export { PaymentRequirementsSchema, PaymentPayloadSchema } from "x402x/types";

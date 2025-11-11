@@ -1,10 +1,10 @@
 /**
- * 基础测试 - @wtflabs/x402-server
+ * 基础测试 - x402x-server
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
 import { X402Server } from "./server";
-import { Facilitator } from "@wtflabs/x402-facilitator";
+import { Facilitator } from "x402x-facilitator";
 import { createPublicClient, http } from "viem";
 import { bscTestnet } from "viem/chains";
 

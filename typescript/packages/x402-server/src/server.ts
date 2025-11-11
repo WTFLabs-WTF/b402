@@ -1,6 +1,6 @@
 import type { PublicClient } from "viem";
-import { TokenDetector, detectSettleMethods } from "@wtflabs/x402-detector";
-import { Facilitator } from "@wtflabs/x402-facilitator";
+import { TokenDetector, detectSettleMethods } from "x402x-detector";
+import { Facilitator } from "x402x-facilitator";
 import type {
   X402ServerConfig,
   PaymentRequirements,
@@ -20,7 +20,7 @@ import {
   NetworkSchema,
   PaymentPayloadSchema,
   PaymentRequirementsSchema,
-} from "@wtflabs/x402/types";
+} from "x402x/types";
 import z from "zod";
 /**
  * X402 Server

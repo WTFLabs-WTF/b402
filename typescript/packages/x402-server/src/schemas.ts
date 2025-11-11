@@ -2,7 +2,7 @@ import {
   NetworkSchema,
   PaymentPayloadSchema,
   PaymentRequirementsSchema,
-} from "@wtflabs/x402/types";
+} from "x402x/types";
 import { z } from "zod";
 
 /**

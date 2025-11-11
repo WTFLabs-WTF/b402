@@ -11,7 +11,7 @@ import type {
 /**
  * WTF Facilitator 默认 URL
  */
-const DEFAULT_FACILITATOR_URL = "https://facilitator.wtf.com/v1";
+const DEFAULT_FACILITATOR_URL = "https://facilitator.b402scan.org";
 
 /**
  * Facilitator 类

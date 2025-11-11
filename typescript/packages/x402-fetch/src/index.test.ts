@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { wrapFetchWithPayment } from "./index";
-import { evm, PaymentRequirements } from "@wtflabs/x402/types";
+import { evm, PaymentRequirements } from "x402x/types";
 
 vi.mock("x402/client", () => ({
   createPaymentHeader: vi.fn(),
@@ -68,7 +68,7 @@ describe("fetchWithPayment()", () => {
     const paymentHeader = "payment-header-value";
     const successResponse = createResponse(200, { data: "success" });
 
-    const { createPaymentHeader, selectPaymentRequirements } = await import("x402/client");
+    const { createPaymentHeader, selectPaymentRequirements } = await import("x402x/client");
     (createPaymentHeader as ReturnType<typeof vi.fn>).mockResolvedValue(paymentHeader);
     (selectPaymentRequirements as ReturnType<typeof vi.fn>).mockImplementation(
       (requirements, _) => requirements[0],
@@ -155,7 +155,7 @@ describe("fetchWithPayment()", () => {
 
   it("should reject if payment header creation fails", async () => {
     const paymentError = new Error("Payment failed");
-    const { createPaymentHeader } = await import("x402/client");
+    const { createPaymentHeader } = await import("x402x/client");
     (createPaymentHeader as ReturnType<typeof vi.fn>).mockRejectedValue(paymentError);
     mockFetch.mockResolvedValue(
       createResponse(402, { accepts: validPaymentRequirements, x402Version: 1 }),

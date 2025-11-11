@@ -47,4 +47,4 @@ export {
 export { decodeBase64, encodeBase64 } from "./utils";
 
 // Re-export WaitUntil from facilitator
-export type { WaitUntil } from "@wtflabs/x402-facilitator";
+export type { WaitUntil } from "x402x-facilitator";

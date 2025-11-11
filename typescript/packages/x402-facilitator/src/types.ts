@@ -1,7 +1,7 @@
 /**
  * Facilitator 等待策略
  */
-export type WaitUntil = "simulated" | "submitted" | "confirmed";
+export type WaitUntil = "confirmed";
 
 /**
  * Facilitator 配置选项

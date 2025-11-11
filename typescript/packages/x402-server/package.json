@@ -1,6 +1,6 @@
 {
-  "name": "@wtflabs/x402-server",
-  "version": "0.0.1-beta.12",
+  "name": "x402x-server",
+  "version": "0.0.1-beta.100",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/cjs/index.d.ts",
@@ -47,9 +47,9 @@
   "dependencies": {
     "viem": "^2.21.26",
     "zod": "^3.24.2",
-    "@wtflabs/x402-detector": "workspace:^",
-    "@wtflabs/x402-facilitator": "workspace:^",
-    "@wtflabs/x402": "workspace:^"
+    "x402x-detector": "workspace:^",
+    "x402x-facilitator": "workspace:^",
+    "x402x": "workspace:^"
   },
   "peerDependencies": {
     "express": "^4.0.0 || ^5.0.0",

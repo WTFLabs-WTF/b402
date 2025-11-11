@@ -1,6 +1,6 @@
 {
-  "name": "@wtflabs/x402-facilitator",
-  "version": "0.0.1-beta.12",
+  "name": "x402x-facilitator",
+  "version": "0.0.1-beta.100",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -27,9 +27,6 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
-  },
-  "dependencies": {
-    "@wtflabs/x402": "^0.0.1-beta.4"
   },
   "exports": {
     ".": {
