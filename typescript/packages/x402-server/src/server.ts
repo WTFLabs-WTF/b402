@@ -146,7 +146,8 @@ export class X402Server {
       paymentType = validatedConfig.paymentType;
     }
 
-    // TODO: 检测 facilitator supported 是否满足当前 asset 的支付要求
+    // 验证 facilitator 是否支持该 paymentType、网络和资产地址的组合
+    await this.validateFacilitatorSupport(network, paymentType, validatedConfig.asset);
 
     // 构建支付要求（未验证的对象）
     const requirements: PaymentRequirements = {
@@ -465,5 +466,118 @@ export class X402Server {
 
     this.network = networkMap[chainId] || `chain-${chainId}`;
     return this.network;
+  }
+
+  /**
+   * 验证 facilitator 是否支持指定的支付类型、网络和资产地址
+   *
+   * @param network - 网络名称
+   * @param paymentType - 支付类型
+   * @param assetAddress - 资产地址
+   * @throws Error 如果不支持
+   */
+  private async validateFacilitatorSupport(
+    network: string,
+    paymentType: "permit" | "eip3009" | "permit2",
+    assetAddress: string,
+  ): Promise<void> {
+    try {
+      // 获取 facilitator 支持的支付类型
+      const supportedResponse = await this.facilitator.supported();
+
+      if (!supportedResponse || !supportedResponse.kinds || supportedResponse.kinds.length === 0) {
+        // 如果无法获取支持信息，跳过验证（向后兼容）
+        return;
+      }
+
+      // 映射 paymentType 到 EIP-712 primaryType
+      // permit → Permit
+      // eip3009 → TransferWithAuthorization
+      // permit2 → Permit2
+      const primaryTypeMap: Record<string, string> = {
+        permit: "Permit",
+        eip3009: "TransferWithAuthorization",
+        permit2: "Permit2",
+      };
+      const expectedPrimaryType = primaryTypeMap[paymentType];
+
+      // 规范化资产地址（转为小写进行比较）
+      const normalizedAssetAddress = assetAddress.toLowerCase();
+
+      // 检查是否支持该网络、资产地址和 primaryType 的组合
+      const isSupported = supportedResponse.kinds.some(kind => {
+        // 检查网络是否匹配
+        if (kind.network !== network) {
+          return false;
+        }
+
+        // 检查 extra.assets 是否存在
+        const assets = kind.extra?.assets as
+          | Array<{
+            address: string;
+            decimals?: number;
+            eip712?: {
+              name?: string;
+              version?: string;
+              primaryType?: string;
+            };
+          }>
+          | undefined;
+
+        if (!assets || !Array.isArray(assets)) {
+          return false;
+        }
+
+        // 检查是否有匹配的资产
+        return assets.some(asset => {
+          const addressMatch =
+            asset.address && asset.address.toLowerCase() === normalizedAssetAddress;
+          const primaryTypeMatch =
+            asset.eip712?.primaryType && asset.eip712.primaryType === expectedPrimaryType;
+
+          return addressMatch && primaryTypeMatch;
+        });
+      });
+
+      if (!isSupported) {
+        // 提供更友好的错误信息
+        const supportedCombinations: string[] = [];
+        supportedResponse.kinds.forEach(kind => {
+          const assets = kind.extra?.assets as
+            | Array<{
+              address: string;
+              decimals?: number;
+              eip712?: {
+                name?: string;
+                version?: string;
+                primaryType?: string;
+              };
+            }>
+            | undefined;
+
+          if (assets && Array.isArray(assets)) {
+            assets.forEach(asset => {
+              if (asset.eip712?.primaryType) {
+                supportedCombinations.push(
+                  `${asset.eip712.primaryType} for ${asset.address} on ${kind.network}`,
+                );
+              }
+            });
+          }
+        });
+
+        throw new Error(
+          `Facilitator does not support '${paymentType}' (${expectedPrimaryType}) for asset '${assetAddress}' on network '${network}'. ` +
+          `Supported combinations: \n${supportedCombinations.length > 0 ? supportedCombinations.join(";\n") : "none"}`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("does not support")) {
+        // 重新抛出我们自己的错误
+        throw error;
+      }
+      // 其他错误（如网络错误）只记录日志，不阻止流程
+      console.warn("Failed to validate facilitator support:", error);
+    }
   }
 }
