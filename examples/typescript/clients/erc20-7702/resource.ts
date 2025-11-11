@@ -19,10 +19,12 @@ dotenv.config({ path: envPath });
 const PORT = 4025;
 // 代币地址
 const PERMIT_TOKEN_ADDRESS = "0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d" as Hex; // permit token
+const EIP3009_TOKEN_ADDRESS = "0xF0EBB572643336834d516C485ad31d3299999999" as Hex; // EIP-3009 token
 const PAYMENT_AMOUNT = "1000"; // 1 USDC (1000000000000000000 wei, assuming 18 decimals)
 const PROVIDER_URL = process.env.PROVIDER_URL || "https://data-seed-prebsc-1-s1.bnbchain.org:8545";
 // 收款地址 - 7702合约地址（用户的EIP-7702授权地址）
 const RECIPIENT_ADDRESS =
+  // '0xa546dee1fd598a34573319eae22d688f827bec4c'
   (process.env.RECIPIENT_ADDRESS as Hex) ||
   ("0x0000000011025134e0f8a417b37e27d90b70678b" as Hex);
 
@@ -42,6 +44,7 @@ console.log(`   - Chain ID: ${client.chain?.id}`);
 const facilitator = new Facilitator({
   recipientAddress: RECIPIENT_ADDRESS,
   waitUntil: "confirmed", // simulated | submitted | confirmed
+  // baseUrl: "https://facilitator.b402scan.org",
   baseUrl: "http://127.0.0.1:3000",
 });
 
@@ -62,7 +65,7 @@ console.log(`   - Path: /permit`);
 
 // 4. 初始化和预热缓存（可选）
 (async () => {
-  const initResult = await server.initialize([PERMIT_TOKEN_ADDRESS]);
+  const initResult = await server.initialize([PERMIT_TOKEN_ADDRESS, EIP3009_TOKEN_ADDRESS]);
   if (!initResult.success) {
     console.error(`\n❌ Server 初始化失败:`, initResult.error);
     process.exit(1);
@@ -78,6 +81,9 @@ console.log(`   - Path: /permit`);
   console.log(`\n  📍 /permit endpoint:`);
   console.log(`     Token: ${PERMIT_TOKEN_ADDRESS}`);
   console.log(`     Type: EIP-2612 Permit → 7702`);
+  console.log(`\n  📍 /eip3009 endpoint:`);
+  console.log(`     Token: ${EIP3009_TOKEN_ADDRESS}`);
+  console.log(`     Type: EIP-3009 TransferWithAuthorization`);
   console.log(`═══════════════════════════════════════════\n`);
 })();
 
@@ -156,6 +162,103 @@ app.get("/permit", async (c) => {
       mimeType: "application/json",
       maxTimeoutSeconds: 3600,
       paymentType: "permit",
+      outputSchema: {
+        input: {
+          type: "http",
+          method: "POST",
+          discoverable: true,
+          bodyFields: {},
+        },
+        output: {
+          message: "string",
+          authorizationType: "string",
+          payer: "string",
+          transactionHash: "string",
+        },
+      },
+    });
+
+    return c.json({
+      x402Version: 1,
+      accepts: [requirements],
+    });
+  } catch (err: any) {
+    console.error("❌ Error creating requirements:", err.message);
+    return c.json({ error: "Failed to create payment requirements" }, 500);
+  }
+});
+
+// POST /eip3009 - EIP-3009 Token 端点
+app.post("/eip3009", async (c) => {
+  console.log(`\n📥 Received POST request for EIP-3009 Token`);
+
+  try {
+    // 1. 创建支付要求
+    const requirements = await server.createRequirements({
+      asset: EIP3009_TOKEN_ADDRESS,
+      maxAmountRequired: PAYMENT_AMOUNT,
+      description: "Access to protected resource with EIP-3009 TransferWithAuthorization",
+      resource: `http://localhost:${PORT}/eip3009`,
+      mimeType: "application/json",
+      maxTimeoutSeconds: 3600,
+      paymentType: "eip3009", // 指定 eip3009 类型
+      outputSchema: {
+        input: {
+          type: "http",
+          method: "POST",
+          discoverable: true,
+          bodyFields: {},
+        },
+        output: {
+          message: "string",
+          authorizationType: "string",
+          payer: "string",
+          transactionHash: "string",
+        },
+      },
+    });
+
+    console.log(`\n💳 Payment requirements created`);
+
+    // 2. 处理支付（parse → verify → settle）
+    const paymentHeader = c.req.header("X-PAYMENT");
+    const result = await server.process(paymentHeader, requirements);
+
+    if (!result.success) {
+      console.log("❌ Payment processing failed:", result.response.error);
+      return c.json(result.response, 402);
+    }
+
+    // 3. 支付成功
+    console.log(`✅ Payment verified and settled!`);
+    console.log(`   - Payer: ${result.data.payer}`);
+    console.log(`   - TxHash: ${result.data.txHash}`);
+    console.log("\n✅ Responding 200 OK to client");
+
+    return c.json({
+      message: "Payment verified and settled successfully for EIP-3009 Token!",
+      authorizationType: "eip3009",
+      payer: result.data.payer,
+      transactionHash: result.data.txHash,
+    });
+  } catch (err: any) {
+    console.error("❌ Error processing payment:", err.message);
+    return c.json({ error: "Payment processing failed", details: err.message }, 500);
+  }
+});
+
+// GET /eip3009 (支付要求)
+app.get("/eip3009", async (c) => {
+  try {
+    // 创建支付要求并返回
+    const requirements = await server.createRequirements({
+      asset: EIP3009_TOKEN_ADDRESS,
+      maxAmountRequired: PAYMENT_AMOUNT,
+      description: "Access to protected resource with EIP-3009 TransferWithAuthorization",
+      resource: `http://localhost:${PORT}/eip3009`,
+      mimeType: "application/json",
+      maxTimeoutSeconds: 3600,
+      paymentType: "eip3009",
       outputSchema: {
         input: {
           type: "http",

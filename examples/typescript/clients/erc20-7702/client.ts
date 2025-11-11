@@ -93,15 +93,20 @@ async function makePaymentRequest(endpoint: string, tokenName: string) {
 console.log(`\n═══════════════════════════════════════════`);
 console.log(`   ERC20 x402 Example (7702)`);
 console.log(`═══════════════════════════════════════════`);
-console.log(`\n💡 Testing EIP-7702 contract with Permit payment:`);
+console.log(`\n💡 Testing payment methods:`);
 console.log(`   /permit  - Permit Token using EIP-2612 → 7702`);
-console.log(`\n   Payment automatically settles to 7702 contract!`);
-console.log(`   Fees are handled by the 7702 contract logic.`);
+console.log(`   /eip3009 - EIP-3009 TransferWithAuthorization`);
+console.log(`\n   EIP-3009 supports both 7702 contract and native calls!`);
+console.log(`   Payment automatically detects contract capabilities.`);
 
 (async () => {
   // 测试 Permit Token 端点
-  console.log(`\n\n📍 Testing Permit Token Endpoint`);
-  await makePaymentRequest("/permit", "Permit Token (EIP-2612)");
+  // console.log(`\n\n📍 Testing Permit Token Endpoint`);
+  // await makePaymentRequest("/permit", "Permit Token (EIP-2612)");
+
+  // 测试 EIP-3009 Token 端点
+  console.log(`\n\n📍 Testing EIP-3009 Token Endpoint`);
+  await makePaymentRequest("/eip3009", "EIP-3009 Token (TransferWithAuthorization)");
 
   console.log(`\n\n${'='.repeat(50)}`);
   console.log(`✅ Test completed!`);

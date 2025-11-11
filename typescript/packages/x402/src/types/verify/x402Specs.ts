@@ -69,6 +69,10 @@ export const ErrorReasons = [
   "insufficient_token_balance",
   "transaction_failed",
   "settlement_failed",
+  // ERC165 interface check errors
+  "seller_does_not_support_settle_with_permit",
+  "seller_does_not_support_settle_with_permit2",
+  "seller_interface_check_failed",
 ] as const;
 
 // Refiners

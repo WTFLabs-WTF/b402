@@ -17,6 +17,21 @@ import { SCHEME } from "../../../exact";
 import { splitSignature } from "./sign";
 import { EIP7702SellerWalletMinimalAbi } from "../../../../types/shared/evm";
 
+// ERC165 ABI for supportsInterface
+const ERC165_ABI = [
+  {
+    inputs: [{ name: "interfaceId", type: "bytes4" }],
+    name: "supportsInterface",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
+// Interface ID for settleWithPermit
+// bytes4(keccak256("settleWithPermit(address,address,uint256,uint256,uint8,bytes32,bytes32)"))
+const SETTLE_WITH_PERMIT_INTERFACE_ID = "0x02ccc23e" as const;
+
 /**
  * Verifies an EIP-2612 Permit payment payload
  *
@@ -123,6 +138,30 @@ export async function verify<
     return {
       isValid: false,
       invalidReason: "invalid_spender_address",
+      payer: owner,
+    };
+  }
+
+  // Verify seller address supports settleWithPermit interface (ERC165)
+  try {
+    const supportsInterface = await client.readContract({
+      address: paymentRequirements.payTo as Address,
+      abi: ERC165_ABI,
+      functionName: "supportsInterface",
+      args: [SETTLE_WITH_PERMIT_INTERFACE_ID],
+    });
+
+    if (!supportsInterface) {
+      return {
+        isValid: false,
+        invalidReason: "seller_does_not_support_settle_with_permit",
+        payer: owner,
+      };
+    }
+  } catch {
+    return {
+      isValid: false,
+      invalidReason: "seller_interface_check_failed",
       payer: owner,
     };
   }

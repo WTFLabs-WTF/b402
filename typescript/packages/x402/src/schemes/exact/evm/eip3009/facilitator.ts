@@ -26,6 +26,43 @@ import {
 } from "../../../../types/verify";
 import { SCHEME } from "../../../exact";
 
+// ERC165 ABI for supportsInterface
+const ERC165_ABI = [
+  {
+    inputs: [{ name: "interfaceId", type: "bytes4" }],
+    name: "supportsInterface",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
+// Interface ID for settleWithERC3009
+// bytes4(keccak256("settleWithERC3009(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)"))
+const SETTLE_WITH_ERC3009_INTERFACE_ID = "0x1fe200d9" as const;
+
+// Native EIP-3009 transferWithAuthorization ABI
+// Function selector: 0xe3ee160e
+const TRANSFER_WITH_AUTHORIZATION_ABI = [
+  {
+    inputs: [
+      { internalType: "address", name: "from", type: "address" },
+      { internalType: "address", name: "to", type: "address" },
+      { internalType: "uint256", name: "value", type: "uint256" },
+      { internalType: "uint256", name: "validAfter", type: "uint256" },
+      { internalType: "uint256", name: "validBefore", type: "uint256" },
+      { internalType: "bytes32", name: "nonce", type: "bytes32" },
+      { internalType: "uint8", name: "v", type: "uint8" },
+      { internalType: "bytes32", name: "r", type: "bytes32" },
+      { internalType: "bytes32", name: "s", type: "bytes32" },
+    ],
+    name: "transferWithAuthorization",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
 /**
  * Verifies an EIP-3009 payment payload against the required payment details
  *
@@ -235,32 +272,74 @@ export async function settle<transport extends Transport, chain extends Chain>(
   // Returns the original signature (no-op) if the signature is not a 6492 signature
   const { signature } = parseErc6492Signature(payload.signature as Hex);
 
-  // 拆分签名为 v, r, s
+  // Check if payTo address supports settleWithERC3009 interface (ERC165)
+  let supportsSettleWithERC3009 = false;
+  try {
+    supportsSettleWithERC3009 = await wallet.readContract({
+      address: paymentRequirements.payTo as Address,
+      abi: ERC165_ABI,
+      functionName: "supportsInterface",
+      args: [SETTLE_WITH_ERC3009_INTERFACE_ID],
+    });
+  } catch {
+    // If ERC165 check fails, assume it doesn't support the interface
+    supportsSettleWithERC3009 = false;
+  }
+
+  // 拆分签名为 v, r, s（两种调用方式都需要）
   const sig = hexToSignature(signature);
   const v = Number(sig.v); // 确保 v 是 number 类型 (uint8)
   const r = sig.r;
   const s = sig.s;
 
-  // 调用 7702 合约的 settleWithERC3009 方法
-  // 7702 合约会处理 transferWithAuthorization，并自动收取手续费
-  const tx = await wallet.writeContract({
-    address: paymentRequirements.payTo as Address,
-    abi: EIP7702SellerWalletMinimalAbi,
-    functionName: "settleWithERC3009",
-    args: [
-      paymentRequirements.asset as Address, // token
-      payload.authorization.from as Address, // payer
-      BigInt(payload.authorization.value), // amount
-      BigInt(payload.authorization.validAfter), // validAfter
-      BigInt(payload.authorization.validBefore), // validBefore
-      payload.authorization.nonce as Hex, // nonce
-      v, // v (uint8)
-      r, // r (bytes32)
-      s, // s (bytes32)
-    ],
-    chain: wallet.chain as Chain,
-    gasPrice,
-  });
+  let tx: Hex;
+
+  if (supportsSettleWithERC3009) {
+    // console.log("走了合约");
+    // Use 7702 contract call with settleWithERC3009
+    // 调用 7702 合约的 settleWithERC3009 方法
+    // 7702 合约会处理 transferWithAuthorization，并自动收取手续费
+    tx = await wallet.writeContract({
+      address: paymentRequirements.payTo as Address,
+      abi: EIP7702SellerWalletMinimalAbi,
+      functionName: "settleWithERC3009",
+      args: [
+        paymentRequirements.asset as Address, // token
+        payload.authorization.from as Address, // payer
+        BigInt(payload.authorization.value), // amount
+        BigInt(payload.authorization.validAfter), // validAfter
+        BigInt(payload.authorization.validBefore), // validBefore
+        payload.authorization.nonce as Hex, // nonce
+        v, // v (uint8)
+        r, // r (bytes32)
+        s, // s (bytes32)
+      ],
+      chain: wallet.chain as Chain,
+      gasPrice,
+    });
+  } else {
+    // console.log("没走合约");
+    // Use native EIP-3009 transferWithAuthorization
+    // Call transferWithAuthorization on the token contract directly
+    tx = await wallet.writeContract({
+      address: paymentRequirements.asset as Address,
+      abi: TRANSFER_WITH_AUTHORIZATION_ABI,
+      functionName: "transferWithAuthorization",
+      args: [
+        payload.authorization.from as Address, // from
+        paymentRequirements.payTo as Address, // to (payment recipient)
+        BigInt(payload.authorization.value), // value
+        BigInt(payload.authorization.validAfter), // validAfter
+        BigInt(payload.authorization.validBefore), // validBefore
+        payload.authorization.nonce as Hex, // nonce
+        v, // v (uint8)
+        r, // r (bytes32)
+        s, // s (bytes32)
+      ],
+      chain: wallet.chain as Chain,
+      gasPrice,
+    });
+  }
 
   const receipt = await wallet.waitForTransactionReceipt({ hash: tx });
 
