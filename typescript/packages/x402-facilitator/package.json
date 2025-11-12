@@ -1,6 +1,6 @@
 {
   "name": "x402x-facilitator",
-  "version": "0.0.1-beta.103",
+  "version": "0.0.1-beta.104",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
