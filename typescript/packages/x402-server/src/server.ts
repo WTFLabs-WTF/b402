@@ -16,7 +16,12 @@ import type {
 import { CreateRequirementsConfigSchema } from "./schemas";
 import type { CreateRequirementsConfig } from "./schemas";
 import { decodeBase64 } from "./utils";
-import { NetworkSchema, PaymentPayloadSchema, PaymentRequirementsSchema } from "x402x/types";
+import {
+  NetworkName,
+  NetworkSchema,
+  PaymentPayloadSchema,
+  PaymentRequirementsSchema,
+} from "x402x/types";
 import z from "zod";
 /**
  * X402 Server
@@ -456,19 +461,12 @@ export class X402Server {
 
     // 映射常见的 chainId 到网络名称
     const networkMap: Record<number, string> = {
-      1: "ethereum-mainnet",
-      5: "ethereum-goerli",
-      11155111: "ethereum-sepolia",
-      56: "bsc-mainnet",
-      97: "bsc-testnet",
-      137: "polygon-mainnet",
-      80001: "polygon-mumbai",
-      42161: "arbitrum-mainnet",
-      421613: "arbitrum-goerli",
-      10: "optimism-mainnet",
-      420: "optimism-goerli",
-      8453: "base-mainnet",
-      84531: "base-goerli",
+      56: NetworkName.Bsc,
+      97: NetworkName.BscTestnet,
+      137: NetworkName.Polygon,
+      80001: NetworkName.PolygonAmoy,
+      8453: NetworkName.Base,
+      84531: NetworkName.BaseSepolia,
     };
 
     this.network = networkMap[chainId] || `chain-${chainId}`;

@@ -17,13 +17,13 @@ export type MultiNetworkSigner = { evm: evm.EvmSigner; svm: svm.SvmSigner };
  * @example
  * ```typescript
  * // Legacy EVM usage
- * const client = createConnectedClient('bsc-mainnet');
+ * const client = createConnectedClient('bsc');
  *
  * // EVM with custom RPC
- * const client = createConnectedClient('bsc-mainnet', 'https://my-rpc.com');
+ * const client = createConnectedClient('bsc', 'https://my-rpc.com');
  *
  * // EVM with withChain
- * const client = createConnectedClient(withChain('bsc-mainnet'));
+ * const client = createConnectedClient(withChain('bsc'));
  *
  * // EVM with viem Chain
  * import { bsc } from 'viem/chains';
@@ -65,13 +65,13 @@ export function createConnectedClient(
  * @example
  * ```typescript
  * // Legacy EVM usage
- * const signer = await createSigner('bsc-mainnet', '0x...');
+ * const signer = await createSigner('bsc', '0x...');
  *
  * // EVM with custom RPC
- * const signer = await createSigner('bsc-mainnet', '0x...', 'https://my-rpc.com');
+ * const signer = await createSigner('bsc', '0x...', 'https://my-rpc.com');
  *
  * // EVM with withChain
- * const signer = await createSigner(withChain('bsc-mainnet'), '0x...');
+ * const signer = await createSigner(withChain('bsc'), '0x...');
  *
  * // EVM with viem Chain
  * import { bsc } from 'viem/chains';
