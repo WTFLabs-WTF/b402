@@ -16,11 +16,7 @@ import type {
 import { CreateRequirementsConfigSchema } from "./schemas";
 import type { CreateRequirementsConfig } from "./schemas";
 import { decodeBase64 } from "./utils";
-import {
-  NetworkSchema,
-  PaymentPayloadSchema,
-  PaymentRequirementsSchema,
-} from "x402x/types";
+import { NetworkSchema, PaymentPayloadSchema, PaymentRequirementsSchema } from "x402x/types";
 import z from "zod";
 /**
  * X402 Server
