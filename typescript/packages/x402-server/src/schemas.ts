@@ -1,8 +1,4 @@
-import {
-  NetworkSchema,
-  PaymentPayloadSchema,
-  PaymentRequirementsSchema,
-} from "x402x/types";
+import { NetworkSchema, PaymentPayloadSchema, PaymentRequirementsSchema } from "x402x/types";
 import { z } from "zod";
 
 /**
@@ -152,7 +148,7 @@ export type InitResult = z.infer<typeof InitResultSchema>;
 /**
  * ProcessResult Schema
  */
-export const ProcessResultSchema = z.discriminatedUnion("success", [
+export const ProcessResultSchema = z.discriminatedUnion("status", [
   z.object({
     success: z.literal(true),
     status: z.literal(200),
