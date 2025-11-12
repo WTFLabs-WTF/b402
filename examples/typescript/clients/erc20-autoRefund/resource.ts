@@ -8,9 +8,9 @@ import { logger } from "hono/logger";
 import { type Hex, createPublicClient, createWalletClient, http, decodeEventLog, parseAbiItem } from "viem";
 import { bsc } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
-import { Facilitator } from "@wtflabs/x402-facilitator";
-import { X402PaymentSchema } from "@wtflabs/x402-schema";
-import { X402Server } from "@wtflabs/x402-server";
+import { Facilitator } from "x402x-facilitator";
+import { X402PaymentSchema } from "x402x-schema";
+import { X402Server } from "x402x-server";
 import Database from "better-sqlite3";
 
 // Load .env

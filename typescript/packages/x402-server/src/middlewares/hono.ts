@@ -9,6 +9,7 @@ import type { CreateRequirementsConfig, Response402 } from "../schemas";
  * Hono-like Request 接口
  */
 export interface HonoRequest {
+  url?: string;
   header(name: string): string | undefined;
   json<T = unknown>(): Promise<T>;
   query(name: string): string | undefined;
@@ -96,9 +97,16 @@ export function createHonoMiddleware(options: HonoMiddlewareOptions): HonoMiddle
       // 2. 获取额外配置
       const extraConfig = options.getConfig ? await options.getConfig(c) : {};
 
-      // 3. 创建支付要求（过滤掉 undefined 值）
+      // 3. 自动生成 resource URL（如果未在 extraConfig 中提供）
+      let resource: string | undefined = extraConfig.resource;
+      if (!resource && c.req.url) {
+        // 自动从请求信息生成完整的 resource URL
+        resource = c.req.url;
+      }
+
+      // 4. 创建支付要求（过滤掉 undefined 值）
       const filteredConfig = Object.fromEntries(
-        Object.entries(extraConfig).filter(([, value]) => value !== undefined),
+        Object.entries({ ...extraConfig, resource }).filter(([, value]) => value !== undefined),
       );
 
       const requirements = await options.server.createRequirements({
@@ -107,11 +115,11 @@ export function createHonoMiddleware(options: HonoMiddlewareOptions): HonoMiddle
         ...filteredConfig,
       } as CreateRequirementsConfig);
 
-      // 4. 处理支付
+      // 5. 处理支付
       const paymentHeader = c.req.header("x-payment");
       const result = await options.server.process(paymentHeader, requirements);
 
-      // 5. 处理结果
+      // 6. 处理结果
       if (!result.success) {
         // 支付失败，根据错误阶段返回不同状态码
         // - parse/verify 失败: 402 (客户端需要重新支付)
@@ -123,7 +131,7 @@ export function createHonoMiddleware(options: HonoMiddlewareOptions): HonoMiddle
         }
       }
 
-      // 6. 支付成功
+      // 7. 支付成功
       // 将支付信息存储到 context
       c.set("x402", {
         payer: result.data.payer,
@@ -142,14 +150,29 @@ export function createHonoMiddleware(options: HonoMiddlewareOptions): HonoMiddle
       if (options.onError) {
         return options.onError(error as Error, c);
       } else {
-        console.error("x402 middleware error:", error);
-        return c.json(
-          {
-            error: "Payment processing error",
-            message: error instanceof Error ? error.message : "Unknown error",
-          },
-          500,
-        );
+        // 检查是否为 Zod 验证错误
+        const isZodError = error && typeof error === "object" && "issues" in error;
+
+        if (isZodError) {
+          console.error("x402 middleware validation error:", error);
+          return c.json(
+            {
+              error: "Invalid payment configuration",
+              message: error instanceof Error ? error.message : "Validation failed",
+              details: (error as { issues?: unknown[] }).issues,
+            },
+            400,
+          );
+        } else {
+          console.error("x402 middleware error:", error);
+          return c.json(
+            {
+              error: "Payment processing error",
+              message: error instanceof Error ? error.message : "Unknown error",
+            },
+            500,
+          );
+        }
       }
     }
   };

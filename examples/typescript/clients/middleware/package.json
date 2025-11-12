@@ -15,7 +15,10 @@
     "viem": "^2.23.5",
     "x402x": "workspace:*",
     "axios": "^1.7.9",
-    "x402x-fetch": "workspace:*"
+    "x402x-fetch": "workspace:*",
+    "x402x-server": "workspace:*",
+    "x402x-facilitator": "workspace:*",
+    "express": "^5.0.1"
   },
   "devDependencies": {
     "tsx": "^4.19.3",

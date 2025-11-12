@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { base, baseSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { http, publicActions, createWalletClient, Hex, parseUnits } from "viem";
-import { wrapFetchWithPayment } from "@wtflabs/x402-fetch";
+import { wrapFetchWithPayment } from "x402x-fetch";
 
 // --- Load .env ---
 const __filename_env = fileURLToPath(import.meta.url);

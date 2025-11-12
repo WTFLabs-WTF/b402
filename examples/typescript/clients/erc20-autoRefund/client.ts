@@ -10,7 +10,7 @@ import {
   type Hex,
   type Address,
 } from "viem";
-import { wrapFetchWithPayment } from "@wtflabs/x402-fetch";
+import { wrapFetchWithPayment } from "x402x-fetch";
 
 // Load environment variables
 const __filename = fileURLToPath(import.meta.url);

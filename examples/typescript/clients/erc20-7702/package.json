@@ -14,10 +14,10 @@
     "@hono/node-server": "^1.13.8",
     "viem": "^2.23.5",
     "axios": "^1.7.9",
-    "@wtflabs/x402-facilitator": "workspace:*",
-    "@wtflabs/x402-server": "workspace:*",
-    "@wtflabs/x402-fetch": "workspace:*",
-    "@wtflabs/x402": "workspace:*"
+    "x402x-facilitator": "workspace:*",
+    "x402x-server": "workspace:*",
+    "x402x-fetch": "workspace:*",
+    "x402x": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.3",

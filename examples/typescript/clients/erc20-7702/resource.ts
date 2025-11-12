@@ -6,8 +6,8 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { type Hex, createPublicClient, http } from "viem";
 import { bsc } from "viem/chains";
-import { Facilitator } from "@wtflabs/x402-facilitator";
-import { X402Server } from "@wtflabs/x402-server";
+import { Facilitator } from "x402x-facilitator";
+import { X402Server } from "x402x-server";
 
 // Load .env
 const __filename = fileURLToPath(import.meta.url);
