@@ -81,13 +81,13 @@ export type EvmSigner = SignerWallet<Chain, Transport, Account> | LocalAccount;
  * @example
  * ```typescript
  * // Legacy usage with network name
- * const client = createConnectedClient('bsc');
+ * const client = createConnectedClient('bsc-mainnet');
  *
  * // With custom RPC
- * const client = createConnectedClient('bsc', 'https://my-rpc.com');
+ * const client = createConnectedClient('bsc-mainnet', 'https://my-rpc.com');
  *
  * // Using withChain
- * const client = createConnectedClient(withChain('bsc'));
+ * const client = createConnectedClient(withChain('bsc-mainnet'));
  *
  * // Using viem Chain
  * import { bsc } from 'viem/chains';
@@ -96,7 +96,7 @@ export type EvmSigner = SignerWallet<Chain, Transport, Account> | LocalAccount;
  * // Using custom config
  * const client = createConnectedClient({
  *   chainId: 56,
- *   name: 'BSC',
+ *   name: 'BSC Mainnet',
  *   rpcUrl: 'https://my-rpc.com',
  * });
  * ```
@@ -159,13 +159,13 @@ export function createClientAvalancheFuji(): ConnectedClient<
  * @example
  * ```typescript
  * // Legacy usage with network name
- * const signer = createSigner('bsc', '0x...');
+ * const signer = createSigner('bsc-mainnet', '0x...');
  *
  * // With custom RPC
- * const signer = createSigner('bsc', '0x...', 'https://my-rpc.com');
+ * const signer = createSigner('bsc-mainnet', '0x...', 'https://my-rpc.com');
  *
  * // Using withChain
- * const signer = createSigner(withChain('bsc'), '0x...');
+ * const signer = createSigner(withChain('bsc-mainnet'), '0x...');
  *
  * // Using viem Chain
  * import { bsc } from 'viem/chains';
@@ -315,7 +315,7 @@ export function getChainFromNetwork(network: string | undefined): Chain {
  * @example
  * ```typescript
  * // Using string
- * const chain = withChain('bsc');
+ * const chain = withChain('bsc-mainnet');
  *
  * // Using viem chain object
  * import { bsc } from 'viem/chains';
@@ -324,12 +324,12 @@ export function getChainFromNetwork(network: string | undefined): Chain {
  * // Using custom config
  * const chain = withChain({
  *   chainId: 56,
- *   name: 'BSC',
+ *   name: 'BSC Mainnet',
  *   rpcUrl: 'https://my-custom-rpc.com',
  * });
  *
  * // Override RPC for existing chain
- * const chain = withChain('bsc', 'https://my-custom-rpc.com');
+ * const chain = withChain('bsc-mainnet', 'https://my-custom-rpc.com');
  * ```
  */
 export function withChain(config: EvmChainConfig, customRpcUrl?: string): Chain {
